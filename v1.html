@@ -34,11 +34,33 @@
         
         #status-msg { margin-top: 15px; font-size: 14px; color: #f1c40f; font-weight: bold; word-break: break-all;}
         #hud { position: absolute; bottom: 20px; left: 20px; z-index: 5; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; display: none;}
+        
+        /* NOVO: Indicador do ID da Sala no Topo */
+        #room-id-display {
+            position: absolute;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 5;
+            background: rgba(0, 0, 0, 0.75);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            color: #f1c40f;
+            border: 2px solid #e67e22;
+            font-family: monospace;
+            font-size: 14px;
+            display: none; /* Oculto no menu, aparece apenas dentro do jogo */
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            user-select: all; /* Facilita para selecionar e copiar o ID com um clique */
+        }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
+
+    <div id="room-id-display"></div>
 
     <div id="ui-layer">
         <div class="menu-box">
@@ -126,9 +148,19 @@
             document.getElementById('status-msg').innerText = msg;
         }
 
+        // MODIFICADO: Agora ativa o painel superior e mostra o ID correto
         function startGameEngine() {
             document.getElementById('ui-layer').style.display = 'none';
             document.getElementById('hud').style.display = 'block';
+            
+            const topDisplay = document.getElementById('room-id-display');
+            if (isHost) {
+                topDisplay.innerText = `ID DA SALA (HOST): ${myId}`;
+            } else {
+                const hostId = document.getElementById('room-id').value;
+                topDisplay.innerText = `SALA: ${hostId} (CONECTADO)`;
+            }
+            topDisplay.style.display = 'block';
             
             // Adiciona você mesmo na lista de jogadores
             players[myId] = {
@@ -148,7 +180,6 @@
             peer.on('open', function(id) {
                 myId = id;
                 isHost = true;
-                setStatus(`SALA CRIADA!\nSeu ID é:\n${id}\n\nEnvie este ID para seu amigo.`);
                 startGameEngine();
             });
 
