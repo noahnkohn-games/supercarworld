@@ -35,24 +35,13 @@
         #status-msg { margin-top: 15px; font-size: 14px; color: #f1c40f; font-weight: bold; word-break: break-all;}
         #hud { position: absolute; bottom: 20px; left: 20px; z-index: 5; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; display: none;}
         
-        /* NOVO: Indicador do ID da Sala no Topo */
+        /* Indicador do ID da Sala no Topo */
         #room-id-display {
-            position: absolute;
-            top: 15px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 5;
-            background: rgba(0, 0, 0, 0.75);
-            padding: 10px 20px;
-            border-radius: 20px;
-            font-weight: bold;
-            color: #f1c40f;
-            border: 2px solid #e67e22;
-            font-family: monospace;
-            font-size: 14px;
-            display: none; /* Oculto no menu, aparece apenas dentro do jogo */
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-            user-select: all; /* Facilita para selecionar e copiar o ID com um clique */
+            position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 5;
+            background: rgba(0, 0, 0, 0.75); padding: 10px 20px; border-radius: 20px;
+            font-weight: bold; color: #f1c40f; border: 2px solid #e67e22;
+            font-family: monospace; font-size: 14px; display: none;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5); user-select: all;
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -81,27 +70,23 @@
     <div id="canvas-container"></div>
 
     <script>
-        // --- VARIÁVEIS DO JOGO E MULTIPLAYER ---
         let peer = null;
         let isHost = false;
         let myId = null;
-        let hostConnection = null; // Usado pelo Cliente
-        let clientConnections = []; // Usado pelo Host
+        let hostConnection = null;
+        let clientConnections = [];
         
         let myName = "";
-        let myColor = Math.random() * 0xffffff; // Cor aleatória para cada jogador
+        let myColor = Math.random() * 0xffffff;
+        let players = {};
         
-        // Estado do jogo
-        let players = {}; // Guarda as informações e os modelos 3D de todos os carros conectados
-        
-        // Física local do seu carro
         let mySpeed = 0;
         let myRotation = 0;
         let myX = 0;
         let myZ = 0;
         const keys = {};
 
-        // --- SETUP DO THREE.JS (GRÁFICOS) ---
+        // --- SETUP GRÁFICO (THREE.JS) ---
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87ceeb);
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
@@ -112,15 +97,13 @@
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); scene.add(ambientLight);
         const sunLight = new THREE.DirectionalLight(0xfffaf0, 1.0); sunLight.position.set(100, 200, 50); scene.add(sunLight);
 
-        // Chão e Cidade Simplificada (Para ter referência de movimento)
         const ground = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshStandardMaterial({ color: 0x2f7d3b }));
         ground.rotation.x = -Math.PI / 2;
         scene.add(ground);
 
-        // Grid de ruas e prédios simples
         for(let x = -200; x <= 200; x+= 40) {
             for(let z = -200; z <= 200; z+= 40) {
-                if(Math.abs(x) < 20 && Math.abs(z) < 20) continue; // Deixa o centro livre
+                if(Math.abs(x) < 20 && Math.abs(z) < 20) continue;
                 let building = new THREE.Mesh(
                     new THREE.BoxGeometry(25, Math.random() * 20 + 10, 25), 
                     new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff })
@@ -130,7 +113,6 @@
             }
         }
 
-        // Função para criar o modelo 3D do carro
         function createCarMesh(colorHex) {
             const group = new THREE.Group();
             const body = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 4), new THREE.MeshStandardMaterial({ color: colorHex }));
@@ -143,13 +125,12 @@
         }
 
         // --- LÓGICA MULTIPLAYER (PEERJS) ---
-
         function setStatus(msg) {
             document.getElementById('status-msg').innerText = msg;
         }
 
-        // MODIFICADO: Agora ativa o painel superior e mostra o ID correto
         function startGameEngine() {
+            console.log("[GERAL] Iniciando engine gráfica...");
             document.getElementById('ui-layer').style.display = 'none';
             document.getElementById('hud').style.display = 'block';
             
@@ -162,38 +143,48 @@
             }
             topDisplay.style.display = 'block';
             
-            // Adiciona você mesmo na lista de jogadores
             players[myId] = {
                 name: myName, color: myColor, x: 0, z: 0, rotation: 0, mesh: createCarMesh(myColor)
             };
             
-            animate(); // Inicia o loop do jogo
+            animate();
         }
 
-        // 1. O Jogador 1 (Host) clica aqui para criar a sala
+        // --- LÓGICA DO HOST ---
         function createRoom() {
             myName = document.getElementById('player-name').value || "Host";
             setStatus("Criando sala, aguarde...");
+            console.log("[HOST] Tentando conectar ao servidor PeerJS para criar sala...");
             
-            peer = new Peer(); // Gera um ID aleatório no servidor público do PeerJS
+            peer = new Peer();
             
             peer.on('open', function(id) {
                 myId = id;
                 isHost = true;
+                console.log("[HOST] Sala criada com sucesso! ID:", id);
                 startGameEngine();
             });
 
-            // Quando algum cliente tenta se conectar ao Host
             peer.on('connection', function(conn) {
+                console.log(`[HOST] Nova tentativa de conexão recebida do ID: ${conn.peer}`);
                 clientConnections.push(conn);
                 
+                conn.on('open', function() {
+                    console.log(`[HOST] Conexão ESTABELECIDA com o cliente: ${conn.peer}`);
+                });
+
                 conn.on('data', function(data) {
                     if(data.type === 'join') {
-                        // Novo jogador conectou. Guarda os dados dele, mas ainda sem Mesh
-                        players[data.id] = { name: data.name, color: data.color, x: 0, z: 0, rotation: 0, mesh: null };
+                        console.log(`[HOST] Dados iniciais (join) recebidos do cliente ${data.name} (${data.id})`);
+                        // CORREÇÃO AQUI: O Host agora cria a malha (mesh) para o novo jogador!
+                        players[data.id] = { 
+                            name: data.name, 
+                            color: data.color, 
+                            x: 0, z: 0, rotation: 0, 
+                            mesh: createCarMesh(data.color) 
+                        };
                     } 
                     else if (data.type === 'update') {
-                        // Recebeu as coordenadas do jogador, atualiza na memória do Host
                         if(players[data.id]) {
                             players[data.id].x = data.x;
                             players[data.id].z = data.z;
@@ -203,37 +194,51 @@
                 });
 
                 conn.on('close', function() {
-                    // Se o cliente fechar a aba, remove ele
+                    console.log(`[HOST] Cliente ${conn.peer} desconectou-se.`);
                     clientConnections = clientConnections.filter(c => c.peer !== conn.peer);
                     if(players[conn.peer] && players[conn.peer].mesh) {
                         scene.remove(players[conn.peer].mesh);
                     }
                     delete players[conn.peer];
                 });
+
+                conn.on('error', function(err) {
+                    console.error(`[HOST] Erro na conexão com o cliente ${conn.peer}:`, err);
+                });
+            });
+
+            // Tratamento de erros gerais do Peer (Host)
+            peer.on('error', function(err) {
+                console.error("[HOST] Erro no servidor PeerJS:", err);
+                setStatus("Erro ao criar sala: " + err.type);
             });
         }
 
-        // 2. O Jogador 2 (Cliente) cola o ID e clica aqui para entrar
+        // --- LÓGICA DO CLIENTE (CONVIDADO) ---
         function joinRoom() {
-            const hostId = document.getElementById('room-id').value;
+            const hostId = document.getElementById('room-id').value.trim();
             if(!hostId) return setStatus("Digite o ID da sala primeiro!");
             
             myName = document.getElementById('player-name').value || "Convidado";
-            setStatus("Conectando ao Host...");
+            setStatus("Conectando ao Host... Aguarde.");
+            console.log(`[CLIENTE] Tentando conectar à sala ID: ${hostId}`);
             
             peer = new Peer();
             
             peer.on('open', function(id) {
                 myId = id;
-                hostConnection = peer.connect(hostId);
+                console.log(`[CLIENTE] Conectado ao servidor PeerJS. Meu ID: ${myId}`);
+                console.log(`[CLIENTE] Solicitando conexão direta com o Host: ${hostId}`);
+                
+                hostConnection = peer.connect(hostId, { reliable: true });
                 
                 hostConnection.on('open', function() {
-                    // Avisa o host que você entrou
+                    console.log("[CLIENTE] Conexão direta com o Host ABERTA!");
+                    setStatus("Conectado! Entrando no mundo...");
                     hostConnection.send({ type: 'join', id: myId, name: myName, color: myColor });
                     startGameEngine();
                 });
 
-                // Recebe as atualizações de TUDO o que acontece no mapa (enviado pelo Host)
                 hostConnection.on('data', function(state) {
                     if(state.type === 'stateUpdate') {
                         syncWorldState(state.playersData);
@@ -241,70 +246,76 @@
                 });
                 
                 hostConnection.on('close', function() {
-                    alert("O Host fechou a sala!");
+                    console.warn("[CLIENTE] A conexão com o Host foi fechada.");
+                    alert("O Host fechou a sala ou a conexão caiu!");
                     window.location.reload();
                 });
+
+                hostConnection.on('error', function(err) {
+                    console.error("[CLIENTE] Erro na conexão com o Host:", err);
+                    setStatus("Erro ao conectar com o Host.");
+                });
+            });
+
+            // Tratamento de erros gerais do Peer (Cliente)
+            peer.on('error', function(err) {
+                console.error("[CLIENTE] Erro no servidor PeerJS:", err);
+                if (err.type === 'peer-unavailable') {
+                    setStatus("Erro: Sala não encontrada. O ID está correto?");
+                } else {
+                    setStatus("Erro de rede: " + err.type);
+                }
             });
         }
 
-        // Sincroniza a tela do cliente com o que o Host mandou
         function syncWorldState(serverPlayers) {
-            // Verifica todos os jogadores que vieram do servidor (Host)
             for (let id in serverPlayers) {
-                if (id === myId) continue; // Não atualiza você mesmo com dados externos (evita lag visual)
+                if (id === myId) continue;
 
                 let sp = serverPlayers[id];
                 if (!players[id]) {
-                    // Se o jogador não existe na sua tela, cria o carrinho dele
+                    console.log(`[CLIENTE] Renderizando novo jogador na tela: ${sp.name} (${id})`);
                     players[id] = { name: sp.name, color: sp.color, mesh: createCarMesh(sp.color) };
                 }
                 
-                // Atualiza a posição do carrinho do outro jogador
                 players[id].x = sp.x;
                 players[id].z = sp.z;
                 players[id].rotation = sp.rotation;
             }
             
-            // Remove jogadores que saíram da sala
             for (let id in players) {
                 if (id !== myId && !serverPlayers[id]) {
+                    console.log(`[CLIENTE] Removendo jogador desconectado: ${players[id].name}`);
                     scene.remove(players[id].mesh);
                     delete players[id];
                 }
             }
         }
 
-
-        // --- CONTROLES E LOOP PRINCIPAL ---
+        // --- FÍSICA E ANIMAÇÃO ---
         window.addEventListener('keydown', (e) => keys[e.code] = true);
         window.addEventListener('keyup', (e) => keys[e.code] = false);
 
         function updatePhysics() {
-            // Aceleração simples
             if (keys['KeyW'] || keys['ArrowUp']) mySpeed += 0.01;
             else if (keys['KeyS'] || keys['ArrowDown']) mySpeed -= 0.01;
             else {
-                // Atrito
                 mySpeed -= Math.sign(mySpeed) * 0.005;
                 if(Math.abs(mySpeed) < 0.006) mySpeed = 0;
             }
             
-            // Limite de velocidade
             if(mySpeed > 0.8) mySpeed = 0.8;
             if(mySpeed < -0.4) mySpeed = -0.4;
 
-            // Curvas
             if (Math.abs(mySpeed) > 0) {
                 let mod = mySpeed > 0 ? 1 : -1;
                 if (keys['KeyA'] || keys['ArrowLeft']) myRotation += 0.03 * mod;
                 if (keys['KeyD'] || keys['ArrowRight']) myRotation -= 0.03 * mod;
             }
 
-            // Aplica posição
             myX += Math.sin(myRotation) * mySpeed;
             myZ += Math.cos(myRotation) * mySpeed;
 
-            // Atualiza o seu carrinho no seu próprio jogo
             if(players[myId]) {
                 players[myId].x = myX;
                 players[myId].z = myZ;
@@ -316,10 +327,8 @@
 
         function animate() {
             requestAnimationFrame(animate);
-
             updatePhysics();
 
-            // Atualiza todos os modelos 3D na tela (O seu e o dos amigos)
             for (let id in players) {
                 if(players[id].mesh) {
                     players[id].mesh.position.x = players[id].x;
@@ -328,21 +337,14 @@
                 }
             }
 
-            // A câmera sempre segue o SEU carro
             if(players[myId] && players[myId].mesh) {
                 const myCar = players[myId].mesh;
-                const offset = new THREE.Vector3(
-                    -Math.sin(myRotation) * 12, 
-                    6, 
-                    -Math.cos(myRotation) * 12
-                );
+                const offset = new THREE.Vector3(-Math.sin(myRotation) * 12, 6, -Math.cos(myRotation) * 12);
                 camera.position.copy(myCar.position).add(offset);
                 camera.lookAt(myCar.position);
             }
 
-            // --- REDE: ENVIO DE DADOS ---
             if (isHost) {
-                // Se eu for o Host, pego a lista de posições e mando para todos os Clientes
                 let statePayload = {};
                 for(let id in players) {
                     statePayload[id] = { 
@@ -351,10 +353,9 @@
                     };
                 }
                 clientConnections.forEach(conn => {
-                    conn.send({ type: 'stateUpdate', playersData: statePayload });
+                    if(conn.open) conn.send({ type: 'stateUpdate', playersData: statePayload });
                 });
             } else if (hostConnection && hostConnection.open) {
-                // Se eu for um Cliente, mando APENAS a minha posição atual para o Host
                 hostConnection.send({ type: 'update', id: myId, x: myX, z: myZ, rotation: myRotation });
             }
 
