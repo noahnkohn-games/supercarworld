@@ -1,4 +1,156 @@
-// --- LÓGICA DO HOST ---
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SuperCar World - Multiplayer P2P Teste</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, sans-serif; background: #111; color: white; }
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+        
+        /* Menu Multiplayer */
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(15, 20, 22, 0.9); z-index: 10;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+        }
+        .menu-box {
+            background: rgba(255, 255, 255, 0.1); padding: 30px; border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.2); width: 320px; text-align: center;
+        }
+        h1 { color: #e67e22; font-size: 24px; margin-top: 0; }
+        input {
+            width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 6px;
+            border: 1px solid #455a64; background: #263238; color: white; box-sizing: border-box;
+        }
+        button {
+            width: 100%; padding: 12px; border: none; border-radius: 6px; font-weight: bold;
+            cursor: pointer; margin-bottom: 10px; transition: 0.2s;
+        }
+        .btn-host { background: #27ae60; color: white; }
+        .btn-host:hover { background: #2ecc71; }
+        .btn-join { background: #2980b9; color: white; }
+        .btn-join:hover { background: #3498db; }
+        
+        #status-msg { margin-top: 15px; font-size: 14px; color: #f1c40f; font-weight: bold; word-break: break-all;}
+        #hud { position: absolute; bottom: 20px; left: 20px; z-index: 5; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; display: none;}
+        
+        /* Indicador do ID da Sala no Topo */
+        #room-id-display {
+            position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 5;
+            background: rgba(0, 0, 0, 0.75); padding: 10px 20px; border-radius: 20px;
+            font-weight: bold; color: #f1c40f; border: 2px solid #e67e22;
+            font-family: monospace; font-size: 14px; display: none;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5); user-select: all;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+<body>
+
+    <div id="room-id-display"></div>
+
+    <div id="ui-layer">
+        <div class="menu-box">
+            <h1>Multiplayer Teste</h1>
+            <input type="text" id="player-name" value="Piloto" placeholder="Seu Nome">
+            
+            <button class="btn-host" onclick="createRoom()">1. CRIAR SALA (HOST)</button>
+            <hr style="border-color: rgba(255,255,255,0.1); margin: 20px 0;">
+            
+            <input type="text" id="room-id" placeholder="Cole o ID da Sala aqui">
+            <button class="btn-join" onclick="joinRoom()">2. ENTRAR NA SALA</button>
+
+            <div id="status-msg"></div>
+        </div>
+    </div>
+
+    <div id="hud">Velocidade: <span id="speed">0</span> km/h</div>
+    <div id="canvas-container"></div>
+
+    <script>
+        let peer = null;
+        let isHost = false;
+        let myId = null;
+        let hostConnection = null;
+        let clientConnections = [];
+        
+        let myName = "";
+        let myColor = Math.random() * 0xffffff;
+        let players = {};
+        
+        let mySpeed = 0;
+        let myRotation = 0;
+        let myX = 0;
+        let myZ = 0;
+        const keys = {};
+
+        // --- SETUP GRÁFICO (THREE.JS) ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb);
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); scene.add(ambientLight);
+        const sunLight = new THREE.DirectionalLight(0xfffaf0, 1.0); sunLight.position.set(100, 200, 50); scene.add(sunLight);
+
+        const ground = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshStandardMaterial({ color: 0x2f7d3b }));
+        ground.rotation.x = -Math.PI / 2;
+        scene.add(ground);
+
+        for(let x = -200; x <= 200; x+= 40) {
+            for(let z = -200; z <= 200; z+= 40) {
+                if(Math.abs(x) < 20 && Math.abs(z) < 20) continue;
+                let building = new THREE.Mesh(
+                    new THREE.BoxGeometry(25, Math.random() * 20 + 10, 25), 
+                    new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff })
+                );
+                building.position.set(x, building.geometry.parameters.height/2, z);
+                scene.add(building);
+            }
+        }
+
+        function createCarMesh(colorHex) {
+            const group = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 4), new THREE.MeshStandardMaterial({ color: colorHex }));
+            body.position.y = 0.5;
+            const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.4, 2), new THREE.MeshStandardMaterial({ color: 0x222222 }));
+            cabin.position.set(0, 0.9, -0.2);
+            group.add(body, cabin);
+            scene.add(group);
+            return group;
+        }
+
+        // --- LÓGICA MULTIPLAYER (PEERJS) ---
+        function setStatus(msg) {
+            document.getElementById('status-msg').innerText = msg;
+        }
+
+        function startGameEngine() {
+            console.log("[GERAL] Iniciando engine gráfica...");
+            document.getElementById('ui-layer').style.display = 'none';
+            document.getElementById('hud').style.display = 'block';
+            
+            const topDisplay = document.getElementById('room-id-display');
+            if (isHost) {
+                topDisplay.innerText = `ID DA SALA (HOST): ${myId}`;
+            } else {
+                const hostId = document.getElementById('room-id').value;
+                topDisplay.innerText = `SALA: ${hostId} (CONECTADO)`;
+            }
+            topDisplay.style.display = 'block';
+            
+            players[myId] = {
+                name: myName, color: myColor, x: 0, z: 0, rotation: 0, mesh: createCarMesh(myColor)
+            };
+            
+            animate();
+        }
+
+        // --- LÓGICA DO HOST ---
         function createRoom() {
             myName = document.getElementById('player-name').value || "Host";
             setStatus("Criando sala, aguarde...");
@@ -6,7 +158,7 @@
             
             peer = new Peer();
             
-            // NOVO: Sistema de auto-reconexão
+            // Sistema de auto-reconexão
             peer.on('disconnected', function() {
                 console.warn("[HOST] Desconectado do servidor PeerJS. Tentando reconectar automaticamente...");
                 peer.reconnect();
@@ -77,7 +229,7 @@
             
             peer = new Peer();
             
-            // NOVO: Sistema de auto-reconexão
+            // Sistema de auto-reconexão
             peer.on('disconnected', function() {
                 console.warn("[CLIENTE] Desconectado do servidor PeerJS. Tentando reconectar automaticamente...");
                 peer.reconnect();
@@ -88,7 +240,6 @@
                 console.log(`[CLIENTE] Conectado ao servidor PeerJS. Meu ID: ${myId}`);
                 console.log(`[CLIENTE] Solicitando conexão direta com o Host: ${hostId}`);
                 
-                // reliable: true força o WebRTC a tentar garantir a entrega dos dados de conexão
                 hostConnection = peer.connect(hostId, { reliable: true });
                 
                 hostConnection.on('open', function() {
@@ -121,10 +272,112 @@
                 if (err.type === 'peer-unavailable') {
                     setStatus("Erro: Sala não encontrada. O Host fechou ou o ID está errado.");
                 } else if (err.type === 'network' || err.type === 'server-error') {
-                    // Se for erro de rede, o evento 'disconnected' acima tentará reconectar
                     console.warn("[CLIENTE] Falha na rede, o auto-reconectar deve assumir.");
                 } else {
                     setStatus("Erro de rede: " + err.type);
                 }
             });
         }
+
+        function syncWorldState(serverPlayers) {
+            for (let id in serverPlayers) {
+                if (id === myId) continue;
+
+                let sp = serverPlayers[id];
+                if (!players[id]) {
+                    console.log(`[CLIENTE] Renderizando novo jogador na tela: ${sp.name} (${id})`);
+                    players[id] = { name: sp.name, color: sp.color, mesh: createCarMesh(sp.color) };
+                }
+                
+                players[id].x = sp.x;
+                players[id].z = sp.z;
+                players[id].rotation = sp.rotation;
+            }
+            
+            for (let id in players) {
+                if (id !== myId && !serverPlayers[id]) {
+                    console.log(`[CLIENTE] Removendo jogador desconectado: ${players[id].name}`);
+                    scene.remove(players[id].mesh);
+                    delete players[id];
+                }
+            }
+        }
+
+        // --- FÍSICA E ANIMAÇÃO ---
+        window.addEventListener('keydown', (e) => keys[e.code] = true);
+        window.addEventListener('keyup', (e) => keys[e.code] = false);
+
+        function updatePhysics() {
+            if (keys['KeyW'] || keys['ArrowUp']) mySpeed += 0.01;
+            else if (keys['KeyS'] || keys['ArrowDown']) mySpeed -= 0.01;
+            else {
+                mySpeed -= Math.sign(mySpeed) * 0.005;
+                if(Math.abs(mySpeed) < 0.006) mySpeed = 0;
+            }
+            
+            if(mySpeed > 0.8) mySpeed = 0.8;
+            if(mySpeed < -0.4) mySpeed = -0.4;
+
+            if (Math.abs(mySpeed) > 0) {
+                let mod = mySpeed > 0 ? 1 : -1;
+                if (keys['KeyA'] || keys['ArrowLeft']) myRotation += 0.03 * mod;
+                if (keys['KeyD'] || keys['ArrowRight']) myRotation -= 0.03 * mod;
+            }
+
+            myX += Math.sin(myRotation) * mySpeed;
+            myZ += Math.cos(myRotation) * mySpeed;
+
+            if(players[myId]) {
+                players[myId].x = myX;
+                players[myId].z = myZ;
+                players[myId].rotation = myRotation;
+            }
+            
+            document.getElementById('speed').innerText = Math.floor(Math.abs(mySpeed) * 300);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            updatePhysics();
+
+            for (let id in players) {
+                if(players[id].mesh) {
+                    players[id].mesh.position.x = players[id].x;
+                    players[id].mesh.position.z = players[id].z;
+                    players[id].mesh.rotation.y = players[id].rotation;
+                }
+            }
+
+            if(players[myId] && players[myId].mesh) {
+                const myCar = players[myId].mesh;
+                const offset = new THREE.Vector3(-Math.sin(myRotation) * 12, 6, -Math.cos(myRotation) * 12);
+                camera.position.copy(myCar.position).add(offset);
+                camera.lookAt(myCar.position);
+            }
+
+            if (isHost) {
+                let statePayload = {};
+                for(let id in players) {
+                    statePayload[id] = { 
+                        name: players[id].name, color: players[id].color, 
+                        x: players[id].x, z: players[id].z, rotation: players[id].rotation 
+                    };
+                }
+                clientConnections.forEach(conn => {
+                    if(conn.open) conn.send({ type: 'stateUpdate', playersData: statePayload });
+                });
+            } else if (hostConnection && hostConnection.open) {
+                hostConnection.send({ type: 'update', id: myId, x: myX, z: myZ, rotation: myRotation });
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
