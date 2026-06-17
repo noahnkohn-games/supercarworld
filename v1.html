@@ -3,109 +3,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SuperCar World - Multiplayer com Nomes e Personagens</title>
+    <title>SuperCar World - Multiplayer P2P Teste</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, sans-serif; background: #111; color: white; }
         #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
         
+        /* Menu Multiplayer */
         #ui-layer {
             position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: radial-gradient(circle, #1e272c 0%, #0f1416 100%); z-index: 10;
+            background: rgba(15, 20, 22, 0.9); z-index: 10;
             display: flex; flex-direction: column; justify-content: center; align-items: center;
         }
         .menu-box {
-            background: rgba(255, 255, 255, 0.08); backdrop-filter: blur(12px);
-            padding: 30px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15); 
-            width: 320px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            background: rgba(255, 255, 255, 0.1); padding: 30px; border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.2); width: 320px; text-align: center;
         }
-        h1 { color: #e67e22; font-size: 22px; margin-top: 0; letter-spacing: 1px;}
+        h1 { color: #e67e22; font-size: 24px; margin-top: 0; }
         input {
             width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 6px;
-            border: 1px solid #455a64; background: #263238; color: white; box-sizing: border-box; font-weight: bold;
+            border: 1px solid #455a64; background: #263238; color: white; box-sizing: border-box;
         }
         button {
             width: 100%; padding: 12px; border: none; border-radius: 6px; font-weight: bold;
-            cursor: pointer; margin-bottom: 10px; transition: 0.2s; text-transform: uppercase;
+            cursor: pointer; margin-bottom: 10px; transition: 0.2s;
         }
         .btn-host { background: #27ae60; color: white; }
-        .btn-host:hover { background: #2ecc71; transform: translateY(-2px);}
+        .btn-host:hover { background: #2ecc71; }
         .btn-join { background: #2980b9; color: white; }
-        .btn-join:hover { background: #3498db; transform: translateY(-2px);}
+        .btn-join:hover { background: #3498db; }
         
-        #status-msg { margin-top: 15px; font-size: 13px; color: #f1c40f; font-weight: bold; word-break: break-all;}
-        
-        #hud { 
-            position: absolute; bottom: 20px; left: 20px; z-index: 5; 
-            background: rgba(255,255,255,0.85); color: #333; padding: 12px 20px; 
-            border-radius: 10px; border: 2px solid #ccc; display: none; font-weight: bold;
-        }
-        #hud small { display: block; margin-top: 8px; color: #d35400; font-size: 11px; text-transform: uppercase; }
-        .hud-val { font-size: 20px; color: #2c3e50; }
-
-        #room-id-display {
-            position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 5;
-            background: rgba(15, 23, 30, 0.85); padding: 8px 18px; border-radius: 20px;
-            font-weight: bold; color: #f1c40f; border: 2px solid #34495e;
-            font-family: 'Courier New', monospace; font-size: 14px; display: none;
-            box-shadow: 0 6px 20px rgba(0,0,0,0.6); user-select: all; cursor: pointer;
-        }
+        #status-msg { margin-top: 15px; font-size: 14px; color: #f1c40f; font-weight: bold; word-break: break-all;}
+        #hud { position: absolute; bottom: 20px; left: 20px; z-index: 5; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; display: none;}
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
 
-    <div id="room-id-display"></div>
-
     <div id="ui-layer">
         <div class="menu-box">
-            <h1>SuperCar World P2P</h1>
-            <input type="text" id="player-name" value="Piloto Teste" placeholder="Digite seu Nome" maxlength="12">
+            <h1>Multiplayer Teste</h1>
+            <input type="text" id="player-name" value="Piloto" placeholder="Seu Nome">
             
-            <button class="btn-host" onclick="createRoom()">1. Criar Sala (Host)</button>
+            <button class="btn-host" onclick="createRoom()">1. CRIAR SALA (HOST)</button>
             <hr style="border-color: rgba(255,255,255,0.1); margin: 20px 0;">
             
             <input type="text" id="room-id" placeholder="Cole o ID da Sala aqui">
-            <button class="btn-join" onclick="joinRoom()">2. Entrar na Sala</button>
+            <button class="btn-join" onclick="joinRoom()">2. ENTRAR NA SALA</button>
 
             <div id="status-msg"></div>
         </div>
     </div>
 
-    <div id="hud">
-        Velocidade: <span id="speed" class="hud-val">0</span> km/h
-        <small>F - Entrar/Sair do Veículo</small>
-    </div>
+    <div id="hud">Velocidade: <span id="speed">0</span> km/h</div>
     <div id="canvas-container"></div>
 
     <script>
+        // --- VARIÁVEIS DO JOGO E MULTIPLAYER ---
         let peer = null;
         let isHost = false;
         let myId = null;
-        let hostConnection = null;
-        let clientConnections = [];
+        let hostConnection = null; // Usado pelo Cliente
+        let clientConnections = []; // Usado pelo Host
         
         let myName = "";
-        let myColor = Math.floor(Math.random() * 16777215); // Cor aleatória
-        let players = {};
+        let myColor = Math.random() * 0xffffff; // Cor aleatória para cada jogador
         
-        // Estado Físico Local
-        let myIsDriving = true;
+        // Estado do jogo
+        let players = {}; // Guarda as informações e os modelos 3D de todos os carros conectados
+        
+        // Física local do seu carro
         let mySpeed = 0;
         let myRotation = 0;
         let myX = 0;
         let myZ = 0;
-        
-        let myHumanX = 0;
-        let myHumanZ = 0;
-        let myHumanRotation = 0;
-
         const keys = {};
-        let lastFrameTime = 0;
-        let lastNetworkSend = 0;
-        const NETWORK_TICK_RATE = 50; 
 
-        // --- SETUP GRÁFICO (THREE.JS) ---
+        // --- SETUP DO THREE.JS (GRÁFICOS) ---
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87ceeb);
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
@@ -116,201 +90,168 @@
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); scene.add(ambientLight);
         const sunLight = new THREE.DirectionalLight(0xfffaf0, 1.0); sunLight.position.set(100, 200, 50); scene.add(sunLight);
 
-        // Chão e Cidade
+        // Chão
         const ground = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshStandardMaterial({ color: 0x2f7d3b }));
         ground.rotation.x = -Math.PI / 2;
         scene.add(ground);
 
+        // --- GERAÇÃO DE TEXTURAS PARA OS PRÉDIOS ---
+        function createBuildingMaterials(baseColorHex) {
+            // Cria um canvas para a textura lateral (apenas janelas)
+            const canvasSide = document.createElement('canvas');
+            canvasSide.width = 128;
+            canvasSide.height = 256;
+            const ctxS = canvasSide.getContext('2d');
+            
+            // Fundo do prédio
+            ctxS.fillStyle = baseColorHex;
+            ctxS.fillRect(0, 0, 128, 256);
+            
+            // Janelas (Azul claro simulando vidro reflexivo)
+            ctxS.fillStyle = '#aaddff'; 
+            for (let y = 20; y < 220; y += 40) {
+                for (let x = 14; x < 114; x += 30) {
+                    ctxS.fillRect(x, y, 20, 25);
+                }
+            }
+            const texSide = new THREE.CanvasTexture(canvasSide);
+
+            // Cria um canvas para a textura frontal (janelas + porta)
+            const canvasFront = document.createElement('canvas');
+            canvasFront.width = 128;
+            canvasFront.height = 256;
+            const ctxF = canvasFront.getContext('2d');
+            
+            // Copia o design com as janelas
+            ctxF.drawImage(canvasSide, 0, 0); 
+            
+            // Desenha uma porta no térreo
+            ctxF.fillStyle = '#2d1b00'; // Cor de madeira escura
+            ctxF.fillRect(44, 216, 40, 40); 
+            const texFront = new THREE.CanvasTexture(canvasFront);
+
+            // Criação dos materiais
+            const matSide = new THREE.MeshStandardMaterial({ map: texSide });
+            const matFront = new THREE.MeshStandardMaterial({ map: texFront });
+            const matTop = new THREE.MeshStandardMaterial({ color: baseColorHex });
+
+            // O BoxGeometry requer 6 materiais nesta ordem: [Direita, Esquerda, Cima, Baixo, Frente, Trás]
+            return [matSide, matSide, matTop, matTop, matFront, matSide];
+        }
+
+        // Grid de ruas e prédios com janelas e portas
         for(let x = -200; x <= 200; x+= 40) {
             for(let z = -200; z <= 200; z+= 40) {
-                if(Math.abs(x) < 20 && Math.abs(z) < 20) continue;
+                if(Math.abs(x) < 20 && Math.abs(z) < 20) continue; // Deixa o centro livre
+                
+                // Gera uma cor aleatória em formato Hexadecimal (ex: '#f3a2b1')
+                let colorHex = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+                
+                // Aplica os materiais ao prédio
                 let building = new THREE.Mesh(
-                    new THREE.BoxGeometry(25, Math.random() * 20 + 10, 25), 
-                    new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff })
+                    new THREE.BoxGeometry(25, Math.random() * 20 + 15, 25), 
+                    createBuildingMaterials(colorHex)
                 );
+                
                 building.position.set(x, building.geometry.parameters.height/2, z);
                 scene.add(building);
             }
         }
 
-        // --- CONSTRUÇÃO DE OBJETOS COM NOME ---
-
-        // Função que gera a placa com o nome flutuando
-        function makeNameTag(name) {
-            const canvas = document.createElement('canvas');
-            canvas.width = 256; canvas.height = 64;
-            const ctx = canvas.getContext('2d');
-            
-            // Fundo escuro transparente
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-            ctx.roundRect(10, 10, 236, 44, 10);
-            ctx.fill();
-            
-            // Texto branco centralizado
-            ctx.fillStyle = 'white';
-            ctx.font = 'bold 24px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(name.toUpperCase(), canvas.width / 2, canvas.height / 2);
-            
-            const texture = new THREE.CanvasTexture(canvas);
-            const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
-            const sprite = new THREE.Sprite(material);
-            sprite.scale.set(4, 1, 1);
-            return sprite;
-        }
-
-        // Modelo do Carro
-        function createCarMesh(colorHex, playerName) {
+        // Função para criar o modelo 3D do carro
+        function createCarMesh(colorHex) {
             const group = new THREE.Group();
             const body = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 4), new THREE.MeshStandardMaterial({ color: colorHex }));
             body.position.y = 0.5;
             const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.4, 2), new THREE.MeshStandardMaterial({ color: 0x222222 }));
             cabin.position.set(0, 0.9, -0.2);
             group.add(body, cabin);
-            
-            const tag = makeNameTag(playerName);
-            tag.position.y = 2.0; // Altura da placa
-            group.add(tag);
-            
-            scene.add(group);
-            return group;
-        }
-
-        // Modelo do Personagem Humano
-        function createHumanMesh(colorHex, playerName) {
-            const group = new THREE.Group();
-            
-            // Tronco (usa a mesma cor do carro como "camisa")
-            const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.3), new THREE.MeshStandardMaterial({ color: colorHex }));
-            body.position.y = 0.65;
-            
-            // Cabeça
-            const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshStandardMaterial({ color: 0xffdbac }));
-            head.position.y = 1.2;
-            
-            group.add(body, head);
-            
-            const tag = makeNameTag(playerName);
-            tag.position.y = 2.0;
-            group.add(tag);
-            
             scene.add(group);
             return group;
         }
 
         // --- LÓGICA MULTIPLAYER (PEERJS) ---
+
         function setStatus(msg) {
             document.getElementById('status-msg').innerText = msg;
         }
 
         function startGameEngine() {
-            console.log("[GERAL] Iniciando engine gráfica...");
             document.getElementById('ui-layer').style.display = 'none';
             document.getElementById('hud').style.display = 'block';
             
-            const topDisplay = document.getElementById('room-id-display');
-            if (isHost) {
-                topDisplay.innerText = `ID DA SALA (HOST): ${myId}`;
-            } else {
-                const hostId = document.getElementById('room-id').value;
-                topDisplay.innerText = `SALA: ${hostId} (CONECTADO)`;
-            }
-            topDisplay.style.display = 'block';
-            
-            // Cria os dois corpos para você mesmo
+            // Adiciona você mesmo na lista de jogadores
             players[myId] = {
-                name: myName, color: myColor, isDriving: true,
-                car: { x: 0, z: 0, rotation: 0, targetX: 0, targetZ: 0, targetRotation: 0 },
-                human: { x: 0, z: 0, rotation: 0, targetX: 0, targetZ: 0, targetRotation: 0 },
-                carMesh: createCarMesh(myColor, myName),
-                humanMesh: createHumanMesh(myColor, myName)
+                name: myName, color: myColor, x: 0, z: 0, rotation: 0, mesh: createCarMesh(myColor)
             };
-            // Esconde o humano porque você nasce dirigindo
-            players[myId].humanMesh.visible = false;
             
-            requestAnimationFrame(animate);
+            animate(); // Inicia o loop do jogo
         }
 
-        // --- LÓGICA DO HOST ---
+        // 1. O Jogador 1 (Host) clica aqui para criar a sala
         function createRoom() {
             myName = document.getElementById('player-name').value || "Host";
             setStatus("Criando sala, aguarde...");
             
-            peer = new Peer();
-            peer.on('disconnected', function() { peer.reconnect(); });
+            peer = new Peer(); 
             
             peer.on('open', function(id) {
                 myId = id;
                 isHost = true;
+                setStatus(`SALA CRIADA!\nSeu ID é:\n${id}\n\nEnvie este ID para seu amigo.`);
                 startGameEngine();
             });
 
+            // Quando algum cliente tenta se conectar ao Host
             peer.on('connection', function(conn) {
                 clientConnections.push(conn);
                 
                 conn.on('data', function(data) {
                     if(data.type === 'join') {
-                        console.log(`[HOST] Cliente Entrou: ${data.name}`);
-                        players[data.id] = { 
-                            name: data.name, color: data.color, isDriving: true,
-                            car: { x: 0, z: 0, rotation: 0, targetX: 0, targetZ: 0, targetRotation: 0 },
-                            human: { x: 0, z: 0, rotation: 0, targetX: 0, targetZ: 0, targetRotation: 0 },
-                            carMesh: createCarMesh(data.color, data.name),
-                            humanMesh: createHumanMesh(data.color, data.name)
-                        };
-                        players[data.id].humanMesh.visible = false;
+                        players[data.id] = { name: data.name, color: data.color, x: 0, z: 0, rotation: 0, mesh: null };
                     } 
                     else if (data.type === 'update') {
                         if(players[data.id]) {
-                            let p = players[data.id];
-                            p.isDriving = data.isDriving;
-                            p.car.targetX = data.car.x;
-                            p.car.targetZ = data.car.z;
-                            p.car.targetRotation = data.car.rotation;
-                            p.human.targetX = data.human.x;
-                            p.human.targetZ = data.human.z;
-                            p.human.targetRotation = data.human.rotation;
+                            players[data.id].x = data.x;
+                            players[data.id].z = data.z;
+                            players[data.id].rotation = data.rotation;
                         }
                     }
                 });
 
                 conn.on('close', function() {
-                    console.log(`[HOST] Cliente ${conn.peer} desconectou.`);
                     clientConnections = clientConnections.filter(c => c.peer !== conn.peer);
-                    if(players[conn.peer]) {
-                        scene.remove(players[conn.peer].carMesh);
-                        scene.remove(players[conn.peer].humanMesh);
-                        delete players[conn.peer];
+                    if(players[conn.peer] && players[conn.peer].mesh) {
+                        scene.remove(players[conn.peer].mesh);
                     }
+                    delete players[conn.peer];
                 });
             });
-            peer.on('error', function(err) { setStatus("Erro: " + err.type); });
         }
 
-        // --- LÓGICA DO CLIENTE ---
+        // 2. O Jogador 2 (Cliente) cola o ID e clica aqui para entrar
         function joinRoom() {
-            const hostId = document.getElementById('room-id').value.trim();
-            if(!hostId) return setStatus("Digite o ID!");
+            const hostId = document.getElementById('room-id').value;
+            if(!hostId) return setStatus("Digite o ID da sala primeiro!");
             
             myName = document.getElementById('player-name').value || "Convidado";
-            setStatus("Conectando...");
+            setStatus("Conectando ao Host...");
             
             peer = new Peer();
-            peer.on('disconnected', function() { peer.reconnect(); });
             
             peer.on('open', function(id) {
                 myId = id;
-                hostConnection = peer.connect(hostId, { reliable: true });
+                hostConnection = peer.connect(hostId);
                 
                 hostConnection.on('open', function() {
-                    setStatus("Conectado!");
                     hostConnection.send({ type: 'join', id: myId, name: myName, color: myColor });
                     startGameEngine();
                 });
 
                 hostConnection.on('data', function(state) {
-                    if(state.type === 'stateUpdate') syncWorldState(state.playersData);
+                    if(state.type === 'stateUpdate') {
+                        syncWorldState(state.playersData);
+                    }
                 });
                 
                 hostConnection.on('close', function() {
@@ -318,222 +259,110 @@
                     window.location.reload();
                 });
             });
-            peer.on('error', function(err) { 
-                if (err.type === 'peer-unavailable') setStatus("Sala não encontrada.");
-                else setStatus("Erro: " + err.type); 
-            });
         }
 
-        // Atualiza a visão do Cliente baseado no que o Host envia
+        // Sincroniza a tela do cliente com o que o Host mandou
         function syncWorldState(serverPlayers) {
             for (let id in serverPlayers) {
-                if (id === myId) continue;
+                if (id === myId) continue; 
+
                 let sp = serverPlayers[id];
-                
                 if (!players[id]) {
-                    console.log(`[CLIENTE] Criando modelos de: ${sp.name}`);
-                    players[id] = { 
-                        name: sp.name, color: sp.color, isDriving: sp.isDriving,
-                        car: { x: sp.car.x, z: sp.car.z, rotation: sp.car.rotation, targetX: sp.car.x, targetZ: sp.car.z, targetRotation: sp.car.rotation },
-                        human: { x: sp.human.x, z: sp.human.z, rotation: sp.human.rotation, targetX: sp.human.x, targetZ: sp.human.z, targetRotation: sp.human.rotation },
-                        carMesh: createCarMesh(sp.color, sp.name),
-                        humanMesh: createHumanMesh(sp.color, sp.name)
-                    };
-                    players[id].humanMesh.visible = !sp.isDriving;
-                } else {
-                    players[id].isDriving = sp.isDriving;
-                    players[id].car.targetX = sp.car.x;
-                    players[id].car.targetZ = sp.car.z;
-                    players[id].car.targetRotation = sp.car.rotation;
-                    players[id].human.targetX = sp.human.x;
-                    players[id].human.targetZ = sp.human.z;
-                    players[id].human.targetRotation = sp.human.rotation;
+                    players[id] = { name: sp.name, color: sp.color, mesh: createCarMesh(sp.color) };
                 }
+                
+                players[id].x = sp.x;
+                players[id].z = sp.z;
+                players[id].rotation = sp.rotation;
             }
             
-            // Remove quem saiu
             for (let id in players) {
                 if (id !== myId && !serverPlayers[id]) {
-                    scene.remove(players[id].carMesh);
-                    scene.remove(players[id].humanMesh);
+                    scene.remove(players[id].mesh);
                     delete players[id];
                 }
             }
         }
 
-        // --- ENTRADA (TECLADO E AÇÕES) ---
-        window.addEventListener('keydown', (e) => {
-            if (!keys[e.code]) { // Garante que segurar o botão não fará a ação se repetir infinitamente
-                if (e.code === 'KeyF') {
-                    if (myIsDriving) {
-                        // Sair do Carro
-                        myIsDriving = false;
-                        myHumanX = myX + 2; // Spawn do lado de fora do carro
-                        myHumanZ = myZ;
-                        myHumanRotation = myRotation;
-                    } else {
-                        // Entrar no Carro (Calcula distância matemática até a porta)
-                        let dist = Math.hypot(myHumanX - myX, myHumanZ - myZ);
-                        if (dist < 4.0) {
-                            myIsDriving = true;
-                        } else {
-                            console.log("Chegue mais perto do carro para entrar!");
-                        }
-                    }
-                }
-            }
-            keys[e.code] = true;
-        });
+        // --- CONTROLES E LOOP PRINCIPAL ---
+        window.addEventListener('keydown', (e) => keys[e.code] = true);
         window.addEventListener('keyup', (e) => keys[e.code] = false);
 
-        // --- FÍSICA E ANIMAÇÃO ---
-        function updatePhysics(dtMod) {
+        function updatePhysics() {
+            // Aceleração simples
+            if (keys['KeyW'] || keys['ArrowUp']) mySpeed += 0.01;
+            else if (keys['KeyS'] || keys['ArrowDown']) mySpeed -= 0.01;
+            else {
+                // Atrito
+                mySpeed -= Math.sign(mySpeed) * 0.005;
+                if(Math.abs(mySpeed) < 0.006) mySpeed = 0;
+            }
             
-            // Fricção continua afetando o carro mesmo vazio (pra ele parar de andar se você pular fora)
-            mySpeed -= Math.sign(mySpeed) * 0.005 * dtMod;
-            if(Math.abs(mySpeed) < 0.006) mySpeed = 0;
-            
-            if (myIsDriving) {
-                // Controles do Carro
-                if (keys['KeyW'] || keys['ArrowUp']) mySpeed += 0.01 * dtMod;
-                else if (keys['KeyS'] || keys['ArrowDown']) mySpeed -= 0.01 * dtMod;
-                
-                if(mySpeed > 0.8) mySpeed = 0.8;
-                if(mySpeed < -0.4) mySpeed = -0.4;
+            // Limite de velocidade
+            if(mySpeed > 0.8) mySpeed = 0.8;
+            if(mySpeed < -0.4) mySpeed = -0.4;
 
-                if (Math.abs(mySpeed) > 0) {
-                    let mod = mySpeed > 0 ? 1 : -1;
-                    if (keys['KeyA'] || keys['ArrowLeft']) myRotation += 0.03 * mod * dtMod;
-                    if (keys['KeyD'] || keys['ArrowRight']) myRotation -= 0.03 * mod * dtMod;
-                }
-            } else {
-                // Controles do Humano a Pé
-                let walkSpd = 0.08 * dtMod;
-                if (keys['KeyW'] || keys['ArrowUp']) {
-                    myHumanX += Math.sin(myHumanRotation) * walkSpd;
-                    myHumanZ += Math.cos(myHumanRotation) * walkSpd;
-                }
-                if (keys['KeyS'] || keys['ArrowDown']) {
-                    myHumanX -= Math.sin(myHumanRotation) * walkSpd;
-                    myHumanZ -= Math.cos(myHumanRotation) * walkSpd;
-                }
-                if (keys['KeyA'] || keys['ArrowLeft']) myHumanRotation += 0.05 * dtMod;
-                if (keys['KeyD'] || keys['ArrowRight']) myHumanRotation -= 0.05 * dtMod;
+            // Curvas
+            if (Math.abs(mySpeed) > 0) {
+                let mod = mySpeed > 0 ? 1 : -1;
+                if (keys['KeyA'] || keys['ArrowLeft']) myRotation += 0.03 * mod;
+                if (keys['KeyD'] || keys['ArrowRight']) myRotation -= 0.03 * mod;
             }
 
-            // O carro se move baseado na velocidade acumulada
-            myX += Math.sin(myRotation) * mySpeed * dtMod;
-            myZ += Math.cos(myRotation) * mySpeed * dtMod;
+            // Aplica posição
+            myX += Math.sin(myRotation) * mySpeed;
+            myZ += Math.cos(myRotation) * mySpeed;
 
+            // Atualiza o seu carrinho no seu próprio jogo
+            if(players[myId]) {
+                players[myId].x = myX;
+                players[myId].z = myZ;
+                players[myId].rotation = myRotation;
+            }
+            
             document.getElementById('speed').innerText = Math.floor(Math.abs(mySpeed) * 300);
         }
 
-        function animate(time) {
+        function animate() {
             requestAnimationFrame(animate);
 
-            if (!lastFrameTime) lastFrameTime = time;
-            let deltaTime = (time - lastFrameTime) / 1000;
-            lastFrameTime = time;
-            
-            if (deltaTime > 0.1) deltaTime = 0.1; 
-            let dtMod = deltaTime * 60; 
+            updatePhysics();
 
-            updatePhysics(dtMod);
-
+            // Atualiza todos os modelos 3D na tela
             for (let id in players) {
-                let p = players[id];
-                if (!p.carMesh) continue;
-
-                if (id === myId) {
-                    // Seu próprio mundo (Responde instantaneamente aos controles)
-                    p.carMesh.position.set(myX, 0, myZ);
-                    p.carMesh.rotation.y = myRotation;
-                    
-                    p.humanMesh.position.set(myHumanX, 0, myHumanZ);
-                    p.humanMesh.rotation.y = myHumanRotation;
-                    
-                    // Mostra ou esconde o seu boneco dependendo do estado
-                    p.humanMesh.visible = !myIsDriving;
-                } else {
-                    // Mundo dos outros (Interpolação suave)
-                    
-                    // 1. Suavização do Carro
-                    p.car.x += (p.car.targetX - p.car.x) * 0.2 * dtMod;
-                    p.car.z += (p.car.targetZ - p.car.z) * 0.2 * dtMod;
-                    
-                    let diffCar = p.car.targetRotation - p.car.rotation;
-                    while (diffCar < -Math.PI) diffCar += Math.PI * 2;
-                    while (diffCar > Math.PI) diffCar -= Math.PI * 2;
-                    p.car.rotation += diffCar * 0.2 * dtMod;
-
-                    p.carMesh.position.set(p.car.x, 0, p.car.z);
-                    p.carMesh.rotation.y = p.car.rotation;
-
-                    // 2. Suavização do Humano
-                    p.human.x += (p.human.targetX - p.human.x) * 0.2 * dtMod;
-                    p.human.z += (p.human.targetZ - p.human.z) * 0.2 * dtMod;
-                    
-                    let diffHum = p.human.targetRotation - p.human.rotation;
-                    while (diffHum < -Math.PI) diffHum += Math.PI * 2;
-                    while (diffHum > Math.PI) diffHum -= Math.PI * 2;
-                    p.human.rotation += diffHum * 0.2 * dtMod;
-
-                    p.humanMesh.position.set(p.human.x, 0, p.human.z);
-                    p.humanMesh.rotation.y = p.human.rotation;
-                    
-                    // Mostra ou esconde o boneco do amigo dependendo do estado DELE
-                    p.humanMesh.visible = !p.isDriving;
+                if(players[id].mesh) {
+                    players[id].mesh.position.x = players[id].x;
+                    players[id].mesh.position.z = players[id].z;
+                    players[id].mesh.rotation.y = players[id].rotation;
                 }
             }
 
-            // A Câmera segue o Veículo ou o Humano
-            if(players[myId]) {
-                if (myIsDriving) {
-                    const myCar = players[myId].carMesh;
-                    const offset = new THREE.Vector3(-Math.sin(myRotation) * 12, 6, -Math.cos(myRotation) * 12);
-                    camera.position.copy(myCar.position).add(offset);
-                    camera.lookAt(myCar.position);
-                } else {
-                    const myBody = players[myId].humanMesh;
-                    const offset = new THREE.Vector3(-Math.sin(myHumanRotation) * 6, 4, -Math.cos(myHumanRotation) * 6);
-                    camera.position.copy(myBody.position).add(offset);
-                    camera.lookAt(myBody.position.clone().add(new THREE.Vector3(0, 1, 0))); // Olha um pouco para cima (cabeça)
-                }
+            // A câmera sempre segue o SEU carro
+            if(players[myId] && players[myId].mesh) {
+                const myCar = players[myId].mesh;
+                const offset = new THREE.Vector3(
+                    -Math.sin(myRotation) * 12, 
+                    6, 
+                    -Math.cos(myRotation) * 12
+                );
+                camera.position.copy(myCar.position).add(offset);
+                camera.lookAt(myCar.position);
             }
 
-            // Transmissão da Rede
-            if (time - lastNetworkSend > NETWORK_TICK_RATE) {
-                lastNetworkSend = time;
-                
-                if (isHost) {
-                    let statePayload = {};
-                    for(let id in players) {
-                        let p = players[id];
-                        statePayload[id] = { 
-                            name: p.name, color: p.color, isDriving: p.isDriving,
-                            car: {
-                                x: (id === myId) ? myX : p.car.targetX, 
-                                z: (id === myId) ? myZ : p.car.targetZ, 
-                                rotation: (id === myId) ? myRotation : p.car.targetRotation 
-                            },
-                            human: {
-                                x: (id === myId) ? myHumanX : p.human.targetX, 
-                                z: (id === myId) ? myHumanZ : p.human.targetZ, 
-                                rotation: (id === myId) ? myHumanRotation : p.human.targetRotation 
-                            }
-                        };
-                    }
-                    clientConnections.forEach(conn => {
-                        if(conn.open) conn.send({ type: 'stateUpdate', playersData: statePayload });
-                    });
-                } else if (hostConnection && hostConnection.open) {
-                    // O cliente diz pro host onde estão seu carro e seu humano
-                    hostConnection.send({ 
-                        type: 'update', id: myId, isDriving: myIsDriving,
-                        car: { x: myX, z: myZ, rotation: myRotation },
-                        human: { x: myHumanX, z: myHumanZ, rotation: myHumanRotation }
-                    });
+            // --- REDE: ENVIO DE DADOS ---
+            if (isHost) {
+                let statePayload = {};
+                for(let id in players) {
+                    statePayload[id] = { 
+                        name: players[id].name, color: players[id].color, 
+                        x: players[id].x, z: players[id].z, rotation: players[id].rotation 
+                    };
                 }
+                clientConnections.forEach(conn => {
+                    conn.send({ type: 'stateUpdate', playersData: statePayload });
+                });
+            } else if (hostConnection && hostConnection.open) {
+                hostConnection.send({ type: 'update', id: myId, x: myX, z: myZ, rotation: myRotation });
             }
 
             renderer.render(scene, camera);
