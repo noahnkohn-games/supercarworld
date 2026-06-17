@@ -3,72 +3,82 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SuperCar World - Multiplayer P2P Teste</title>
+    <title>SuperCar World - Multiplayer (1.0.5</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, sans-serif; background: #111; color: white; }
         #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
         
-        /* Menu Multiplayer */
         #ui-layer {
             position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: rgba(15, 20, 22, 0.9); z-index: 10;
+            background: radial-gradient(circle, #1e272c 0%, #0f1416 100%); z-index: 10;
             display: flex; flex-direction: column; justify-content: center; align-items: center;
         }
         .menu-box {
-            background: rgba(255, 255, 255, 0.1); padding: 30px; border-radius: 12px;
-            border: 1px solid rgba(255,255,255,0.2); width: 320px; text-align: center;
+            background: rgba(255, 255, 255, 0.08); backdrop-filter: blur(12px);
+            padding: 30px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15); 
+            width: 320px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
         }
-        h1 { color: #e67e22; font-size: 24px; margin-top: 0; }
+        h1 { color: #e67e22; font-size: 22px; margin-top: 0; letter-spacing: 1px;}
         input {
             width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 6px;
-            border: 1px solid #455a64; background: #263238; color: white; box-sizing: border-box;
+            border: 1px solid #455a64; background: #263238; color: white; box-sizing: border-box; font-weight: bold;
         }
         button {
             width: 100%; padding: 12px; border: none; border-radius: 6px; font-weight: bold;
-            cursor: pointer; margin-bottom: 10px; transition: 0.2s;
+            cursor: pointer; margin-bottom: 10px; transition: 0.2s; text-transform: uppercase;
         }
         .btn-host { background: #27ae60; color: white; }
-        .btn-host:hover { background: #2ecc71; }
+        .btn-host:hover { background: #2ecc71; transform: translateY(-2px);}
         .btn-join { background: #2980b9; color: white; }
-        .btn-join:hover { background: #3498db; }
+        .btn-join:hover { background: #3498db; transform: translateY(-2px);}
         
-        #status-msg { margin-top: 15px; font-size: 14px; color: #f1c40f; font-weight: bold; word-break: break-all;}
+        #status-msg { margin-top: 15px; font-size: 13px; color: #f1c40f; font-weight: bold; word-break: break-all;}
         
-        #hud { position: absolute; bottom: 20px; left: 20px; z-index: 5; background: rgba(0,0,0,0.5); padding: 15px; border-radius: 8px; display: none;}
-        #hud-instructions { color: #aaddff; font-size: 12px; margin-top: 5px; }
-        #toast-msg { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: #e74c3c; padding: 10px 20px; border-radius: 5px; display: none; z-index: 20; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.3);}
+        #hud { 
+            position: absolute; bottom: 20px; left: 20px; z-index: 5; 
+            background: rgba(255,255,255,0.85); color: #333; padding: 12px 20px; 
+            border-radius: 10px; border: 2px solid #ccc; display: none; font-weight: bold;
+        }
+        #hud small { display: block; margin-top: 8px; color: #d35400; font-size: 11px; text-transform: uppercase; }
+        .hud-val { font-size: 20px; color: #2c3e50; }
+
+        #room-id-display {
+            position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 5;
+            background: rgba(15, 23, 30, 0.85); padding: 8px 18px; border-radius: 20px;
+            font-weight: bold; color: #f1c40f; border: 2px solid #34495e;
+            font-family: 'Courier New', monospace; font-size: 14px; display: none;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.6); user-select: all; cursor: pointer;
+        }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
 
+    <div id="room-id-display"></div>
+
     <div id="ui-layer">
         <div class="menu-box">
-            <h1>Multiplayer Teste (1.0.4)</h1>
-            <input type="text" id="player-name" value="Piloto" placeholder="Seu Nome">
+            <h1>SuperCar World P2P</h1>
+            <input type="text" id="player-name" value="Piloto Teste" placeholder="Digite seu Nome" maxlength="12">
             
-            <button class="btn-host" onclick="createRoom()">1. CRIAR SALA (HOST)</button>
+            <button class="btn-host" onclick="createRoom()">1. Criar Sala (Host)</button>
             <hr style="border-color: rgba(255,255,255,0.1); margin: 20px 0;">
             
             <input type="text" id="room-id" placeholder="Cole o ID da Sala aqui">
-            <button class="btn-join" onclick="joinRoom()">2. ENTRAR NA SALA</button>
+            <button class="btn-join" onclick="joinRoom()">2. Entrar na Sala</button>
 
             <div id="status-msg"></div>
         </div>
     </div>
 
     <div id="hud">
-        <strong style="font-size: 18px;">Velocidade: <span id="speed">0</span> km/h</strong>
-        <div id="hud-instructions"><b>[W A S D]</b> Mover &nbsp; | &nbsp; <b>[F]</b> Entrar/Sair do Carro &nbsp; | &nbsp; <b>[ESPAÇO]</b> Pular</div>
+        Velocidade: <span id="speed" class="hud-val">0</span> km/h
+        <small>F - Entrar/Sair do Veículo</small>
     </div>
-    
-    <div id="toast-msg">Mensagem de erro</div>
-
     <div id="canvas-container"></div>
 
     <script>
-        // --- VARIÁVEIS DO JOGO E MULTIPLAYER ---
         let peer = null;
         let isHost = false;
         let myId = null;
@@ -76,29 +86,26 @@
         let clientConnections = [];
         
         let myName = "";
-        let myColor = Math.random() * 0xffffff;
+        let myColor = Math.floor(Math.random() * 16777215); // Cor aleatória
+        let players = {};
         
-        // Estado do jogo
-        let players = {}; 
+        // Estado Físico Local
+        let myIsDriving = true;
+        let mySpeed = 0;
+        let myRotation = 0;
+        let myX = 0;
+        let myZ = 0;
         
-        // --- FÍSICA E CONTROLES LOCAIS ---
-        let isInsideCar = true;
+        let myHumanX = 0;
+        let myHumanZ = 0;
+        let myHumanRotation = 0;
+
         const keys = {};
+        let lastFrameTime = 0;
+        let lastNetworkSend = 0;
+        const NETWORK_TICK_RATE = 50; 
 
-        // Carro
-        let carSpeed = 0;
-        let carRotation = 0;
-        let carX = 0;
-        let carZ = 0;
-
-        // Boneco (Personagem)
-        let charX = 0;
-        let charY = 0; // Altura para o pulo
-        let charZ = 0;
-        let charRotation = 0;
-        let charVY = 0; // Velocidade Vertical (gravidade/pulo)
-
-        // --- SETUP DO THREE.JS ---
+        // --- SETUP GRÁFICO (THREE.JS) ---
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87ceeb);
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
@@ -109,87 +116,79 @@
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); scene.add(ambientLight);
         const sunLight = new THREE.DirectionalLight(0xfffaf0, 1.0); sunLight.position.set(100, 200, 50); scene.add(sunLight);
 
-        // Chão
+        // Chão e Cidade
         const ground = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshStandardMaterial({ color: 0x2f7d3b }));
         ground.rotation.x = -Math.PI / 2;
         scene.add(ground);
 
-        // --- GERAÇÃO DE PRÉDIOS ---
-        function createBuildingMaterials(baseColorHex) {
-            const canvasSide = document.createElement('canvas');
-            canvasSide.width = 128; canvasSide.height = 256;
-            const ctxS = canvasSide.getContext('2d');
-            ctxS.fillStyle = baseColorHex; ctxS.fillRect(0, 0, 128, 256);
-            ctxS.fillStyle = '#aaddff'; 
-            for (let y = 20; y < 220; y += 40) {
-                for (let x = 14; x < 114; x += 30) {
-                    ctxS.fillRect(x, y, 20, 25);
-                }
-            }
-            const texSide = new THREE.CanvasTexture(canvasSide);
-
-            const canvasFront = document.createElement('canvas');
-            canvasFront.width = 128; canvasFront.height = 256;
-            const ctxF = canvasFront.getContext('2d');
-            ctxF.drawImage(canvasSide, 0, 0); 
-            ctxF.fillStyle = '#2d1b00'; 
-            ctxF.fillRect(44, 216, 40, 40); 
-            const texFront = new THREE.CanvasTexture(canvasFront);
-
-            const matSide = new THREE.MeshStandardMaterial({ map: texSide });
-            const matFront = new THREE.MeshStandardMaterial({ map: texFront });
-            const matTop = new THREE.MeshStandardMaterial({ color: baseColorHex });
-
-            return [matSide, matSide, matTop, matTop, matFront, matSide];
-        }
-
         for(let x = -200; x <= 200; x+= 40) {
             for(let z = -200; z <= 200; z+= 40) {
-                if(Math.abs(x) < 20 && Math.abs(z) < 20) continue; 
-                let colorHex = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+                if(Math.abs(x) < 20 && Math.abs(z) < 20) continue;
                 let building = new THREE.Mesh(
-                    new THREE.BoxGeometry(25, Math.random() * 20 + 15, 25), 
-                    createBuildingMaterials(colorHex)
+                    new THREE.BoxGeometry(25, Math.random() * 20 + 10, 25), 
+                    new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff })
                 );
                 building.position.set(x, building.geometry.parameters.height/2, z);
                 scene.add(building);
             }
         }
 
-        // --- MODELOS 3D (CARRO E BONECO) ---
-        function createCarMesh(colorHex) {
+        // --- CONSTRUÇÃO DE OBJETOS COM NOME ---
+        function makeNameTag(name) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+            ctx.roundRect(10, 10, 236, 44, 10);
+            ctx.fill();
+            
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(name.toUpperCase(), canvas.width / 2, canvas.height / 2);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(4, 1, 1);
+            return sprite;
+        }
+
+        // Modelo do Carro
+        function createCarMesh(colorHex, playerName) {
             const group = new THREE.Group();
             const body = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 4), new THREE.MeshStandardMaterial({ color: colorHex }));
             body.position.y = 0.5;
             const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.4, 2), new THREE.MeshStandardMaterial({ color: 0x222222 }));
             cabin.position.set(0, 0.9, -0.2);
             group.add(body, cabin);
+            
+            const tag = makeNameTag(playerName);
+            tag.position.y = 2.0;
+            group.add(tag);
+            
             scene.add(group);
             return group;
         }
 
-        function createCharacterMesh(colorHex) {
+        // Modelo do Personagem Humano
+        function createHumanMesh(colorHex, playerName) {
             const group = new THREE.Group();
-            // Corpo
-            const body = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 1.2, 16), new THREE.MeshStandardMaterial({ color: colorHex }));
-            body.position.y = 0.6;
-            // Cabeça
-            const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 16), new THREE.MeshStandardMaterial({ color: 0xffe0bd })); // Cor de pele padrão
-            head.position.y = 1.4;
-            // Rosto (Oculoszinho para indicar a frente)
-            const glasses = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 0.1), new THREE.MeshStandardMaterial({ color: 0x111111 }));
-            glasses.position.set(0, 1.4, 0.28);
-
-            group.add(body, head, glasses);
+            
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.3), new THREE.MeshStandardMaterial({ color: colorHex }));
+            body.position.y = 0.65;
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshStandardMaterial({ color: 0xffdbac }));
+            head.position.y = 1.2;
+            group.add(body, head);
+            
+            const tag = makeNameTag(playerName);
+            tag.position.y = 2.0;
+            group.add(tag);
+            
             scene.add(group);
             return group;
-        }
-
-        function showToast(msg) {
-            const toast = document.getElementById('toast-msg');
-            toast.innerText = msg;
-            toast.style.display = 'block';
-            setTimeout(() => toast.style.display = 'none', 3000);
         }
 
         // --- LÓGICA MULTIPLAYER (PEERJS) ---
@@ -201,73 +200,97 @@
             document.getElementById('ui-layer').style.display = 'none';
             document.getElementById('hud').style.display = 'block';
             
-            // Adiciona você mesmo na lista de jogadores
-            players[myId] = {
-                name: myName, color: myColor, 
-                isInsideCar: true,
-                carX: 0, carZ: 0, carRot: 0,
-                charX: 0, charY: 0, charZ: 0, charRot: 0,
-                carMesh: createCarMesh(myColor),
-                charMesh: createCharacterMesh(myColor)
-            };
+            const topDisplay = document.getElementById('room-id-display');
+            if (isHost) {
+                topDisplay.innerText = `ID DA SALA (HOST): ${myId}`;
+            } else {
+                const hostId = document.getElementById('room-id').value;
+                topDisplay.innerText = `SALA: ${hostId} (CONECTADO)`;
+            }
+            topDisplay.style.display = 'block';
             
-            animate(); 
+            players[myId] = {
+                name: myName, color: myColor, isDriving: true,
+                car: { x: 0, z: 0, rotation: 0, targetX: 0, targetZ: 0, targetRotation: 0 },
+                human: { x: 0, z: 0, rotation: 0, targetX: 0, targetZ: 0, targetRotation: 0 },
+                carMesh: createCarMesh(myColor, myName),
+                humanMesh: createHumanMesh(myColor, myName)
+            };
+            players[myId].humanMesh.visible = false;
+            
+            requestAnimationFrame(animate);
         }
 
-        // 1. O Jogador 1 (Host) clica aqui para criar a sala
+        // --- LÓGICA DO HOST ---
         function createRoom() {
             myName = document.getElementById('player-name').value || "Host";
             setStatus("Criando sala, aguarde...");
-            peer = new Peer(); 
+            
+            peer = new Peer();
+            peer.on('disconnected', function() { peer.reconnect(); });
+            
             peer.on('open', function(id) {
-                myId = id; isHost = true;
-                setStatus(`SALA CRIADA!\nSeu ID é:\n${id}\n\nEnvie este ID para seu amigo.`);
+                myId = id;
+                isHost = true;
                 startGameEngine();
             });
 
             peer.on('connection', function(conn) {
                 clientConnections.push(conn);
+                
                 conn.on('data', function(data) {
                     if(data.type === 'join') {
                         players[data.id] = { 
-                            name: data.name, color: data.color, 
-                            isInsideCar: true,
-                            carX: 0, carZ: 0, carRot: 0,
-                            charX: 0, charY: 0, charZ: 0, charRot: 0,
-                            carMesh: null, charMesh: null 
+                            name: data.name, color: data.color, isDriving: true,
+                            car: { x: 0, z: 0, rotation: 0, targetX: 0, targetZ: 0, targetRotation: 0 },
+                            human: { x: 0, z: 0, rotation: 0, targetX: 0, targetZ: 0, targetRotation: 0 },
+                            carMesh: createCarMesh(data.color, data.name),
+                            humanMesh: createHumanMesh(data.color, data.name)
                         };
-                    } else if (data.type === 'update' && players[data.id]) {
-                        // Recebe os dados físicos do cliente
-                        const p = players[data.id];
-                        p.isInsideCar = data.isInsideCar;
-                        p.carX = data.carX; p.carZ = data.carZ; p.carRot = data.carRot;
-                        p.charX = data.charX; p.charY = data.charY; p.charZ = data.charZ; p.charRot = data.charRot;
+                        players[data.id].humanMesh.visible = false;
+                    } 
+                    else if (data.type === 'update') {
+                        if(players[data.id]) {
+                            let p = players[data.id];
+                            p.isDriving = data.isDriving;
+                            p.car.targetX = data.car.x;
+                            p.car.targetZ = data.car.z;
+                            p.car.targetRotation = data.car.rotation;
+                            p.human.targetX = data.human.x;
+                            p.human.targetZ = data.human.z;
+                            p.human.targetRotation = data.human.rotation;
+                        }
                     }
                 });
 
                 conn.on('close', function() {
                     clientConnections = clientConnections.filter(c => c.peer !== conn.peer);
                     if(players[conn.peer]) {
-                        if(players[conn.peer].carMesh) scene.remove(players[conn.peer].carMesh);
-                        if(players[conn.peer].charMesh) scene.remove(players[conn.peer].charMesh);
+                        scene.remove(players[conn.peer].carMesh);
+                        scene.remove(players[conn.peer].humanMesh);
                         delete players[conn.peer];
                     }
                 });
             });
         }
 
-        // 2. O Jogador 2 (Cliente) cola o ID e clica aqui para entrar
+        // --- LÓGICA DO CLIENTE ---
         function joinRoom() {
-            const hostId = document.getElementById('room-id').value;
-            if(!hostId) return setStatus("Digite o ID da sala primeiro!");
+            const hostId = document.getElementById('room-id').value.trim();
+            if(!hostId) return setStatus("Digite o ID!");
+            
             myName = document.getElementById('player-name').value || "Convidado";
-            setStatus("Conectando ao Host...");
+            setStatus("Conectando...");
             
             peer = new Peer();
+            peer.on('disconnected', function() { peer.reconnect(); });
+            
             peer.on('open', function(id) {
                 myId = id;
-                hostConnection = peer.connect(hostId);
+                hostConnection = peer.connect(hostId, { reliable: true });
+                
                 hostConnection.on('open', function() {
+                    setStatus("Conectado!");
                     hostConnection.send({ type: 'join', id: myId, name: myName, color: myColor });
                     startGameEngine();
                 });
@@ -281,188 +304,218 @@
                     window.location.reload();
                 });
             });
+            peer.on('error', function(err) { 
+                if (err.type === 'peer-unavailable') setStatus("Sala não encontrada.");
+                else setStatus("Erro: " + err.type); 
+            });
         }
 
-        // Sincroniza a tela do cliente com o que o Host mandou
+        // Atualiza a visão do Cliente baseado no que o Host envia
         function syncWorldState(serverPlayers) {
             for (let id in serverPlayers) {
-                if (id === myId) continue; 
+                if (id === myId) continue;
                 let sp = serverPlayers[id];
                 
                 if (!players[id]) {
                     players[id] = { 
-                        name: sp.name, color: sp.color, 
-                        carMesh: createCarMesh(sp.color), charMesh: createCharacterMesh(sp.color) 
+                        name: sp.name, color: sp.color, isDriving: sp.isDriving,
+                        car: { x: sp.car.x, z: sp.car.z, rotation: sp.car.rotation, targetX: sp.car.x, targetZ: sp.car.z, targetRotation: sp.car.rotation },
+                        human: { x: sp.human.x, z: sp.human.z, rotation: sp.human.rotation, targetX: sp.human.x, targetZ: sp.human.z, targetRotation: sp.human.rotation },
+                        carMesh: createCarMesh(sp.color, sp.name),
+                        humanMesh: createHumanMesh(sp.color, sp.name)
                     };
+                    players[id].humanMesh.visible = !sp.isDriving;
+                } else {
+                    players[id].isDriving = sp.isDriving;
+                    players[id].car.targetX = sp.car.x;
+                    players[id].car.targetZ = sp.car.z;
+                    players[id].car.targetRotation = sp.car.rotation;
+                    players[id].human.targetX = sp.human.x;
+                    players[id].human.targetZ = sp.human.z;
+                    players[id].human.targetRotation = sp.human.rotation;
                 }
-                
-                players[id].isInsideCar = sp.isInsideCar;
-                players[id].carX = sp.carX; players[id].carZ = sp.carZ; players[id].carRot = sp.carRot;
-                players[id].charX = sp.charX; players[id].charY = sp.charY; players[id].charZ = sp.charZ; players[id].charRot = sp.charRot;
             }
             
             // Remove quem saiu
             for (let id in players) {
                 if (id !== myId && !serverPlayers[id]) {
                     scene.remove(players[id].carMesh);
-                    scene.remove(players[id].charMesh);
+                    scene.remove(players[id].humanMesh);
                     delete players[id];
                 }
             }
         }
 
-        // --- CONTROLES E LOOP PRINCIPAL ---
+        // --- ENTRADA (TECLADO E AÇÕES) ---
         window.addEventListener('keydown', (e) => {
-            keys[e.code] = true;
-            
-            // Tecla F para alternar (Sair/Entrar do Carro)
-            if (e.code === 'KeyF') {
-                if (isInsideCar) {
-                    // Sair do Carro (Joga o boneco um pouco pro lado da porta)
-                    isInsideCar = false;
-                    charX = carX + Math.cos(carRotation) * 2.5; 
-                    charZ = carZ - Math.sin(carRotation) * 2.5;
-                    charY = 0;
-                    charRotation = carRotation;
-                    carSpeed = 0; // Para o carro ao sair
-                } else {
-                    // Tentar Entrar no Carro
-                    let distance = Math.hypot(charX - carX, charZ - carZ);
-                    if (distance < 5) {
-                        isInsideCar = true;
+            if (!keys[e.code]) { // Garante que segurar o botão não fará a ação se repetir infinitamente
+                if (e.code === 'KeyF') {
+                    if (myIsDriving) {
+                        // Sair do Carro
+                        myIsDriving = false;
+                        myHumanX = myX + 2; // Spawn do lado de fora da porta
+                        myHumanZ = myZ;
+                        myHumanRotation = myRotation;
                     } else {
-                        showToast("Você está muito longe do carro!");
+                        // Entrar no Carro (Calcula distância matemática até a porta)
+                        let dist = Math.hypot(myHumanX - myX, myHumanZ - myZ);
+                        if (dist < 4.0) {
+                            myIsDriving = true;
+                        }
                     }
                 }
             }
+            keys[e.code] = true;
         });
-
         window.addEventListener('keyup', (e) => keys[e.code] = false);
 
-        function updatePhysics() {
-            if (isInsideCar) {
-                // --- FÍSICA DO CARRO ---
-                if (keys['KeyW'] || keys['ArrowUp']) carSpeed += 0.01;
-                else if (keys['KeyS'] || keys['ArrowDown']) carSpeed -= 0.01;
-                else {
-                    carSpeed -= Math.sign(carSpeed) * 0.005;
-                    if(Math.abs(carSpeed) < 0.006) carSpeed = 0;
+        // --- FÍSICA E ANIMAÇÃO ---
+        function updatePhysics(dtMod) {
+            
+            if (myIsDriving) {
+                // Controles do Carro
+                if (keys['KeyW'] || keys['ArrowUp']) {
+                    mySpeed += 0.01 * dtMod;
+                } else if (keys['KeyS'] || keys['ArrowDown']) {
+                    mySpeed -= 0.01 * dtMod;
+                } else {
+                    // Atrito SOMENTE quando nenhum botão estiver pressionado
+                    mySpeed -= Math.sign(mySpeed) * 0.005 * dtMod;
+                    if(Math.abs(mySpeed) < 0.006) mySpeed = 0;
                 }
                 
-                if(carSpeed > 0.8) carSpeed = 0.8;
-                if(carSpeed < -0.4) carSpeed = -0.4;
+                if(mySpeed > 0.8) mySpeed = 0.8;
+                if(mySpeed < -0.4) mySpeed = -0.4;
 
-                if (Math.abs(carSpeed) > 0) {
-                    let mod = carSpeed > 0 ? 1 : -1;
-                    if (keys['KeyA'] || keys['ArrowLeft']) carRotation += 0.03 * mod;
-                    if (keys['KeyD'] || keys['ArrowRight']) carRotation -= 0.03 * mod;
+                if (Math.abs(mySpeed) > 0) {
+                    let mod = mySpeed > 0 ? 1 : -1;
+                    if (keys['KeyA'] || keys['ArrowLeft']) myRotation += 0.03 * mod * dtMod;
+                    if (keys['KeyD'] || keys['ArrowRight']) myRotation -= 0.03 * mod * dtMod;
                 }
-
-                carX += Math.sin(carRotation) * carSpeed;
-                carZ += Math.cos(carRotation) * carSpeed;
-
-                document.getElementById('speed').innerText = Math.floor(Math.abs(carSpeed) * 300);
-            
             } else {
-                // --- FÍSICA DO BONECO ---
-                let walkSpeed = 0;
-                if (keys['KeyW'] || keys['ArrowUp']) walkSpeed = 0.15;
-                if (keys['KeyS'] || keys['ArrowDown']) walkSpeed = -0.15;
-
-                if (keys['KeyA'] || keys['ArrowLeft']) charRotation += 0.08;
-                if (keys['KeyD'] || keys['ArrowRight']) charRotation -= 0.08;
-
-                charX += Math.sin(charRotation) * walkSpeed;
-                charZ += Math.cos(charRotation) * walkSpeed;
-
-                // Pulo
-                if (keys['Space'] && charY === 0) {
-                    charVY = 0.3; // Força do pulo
+                // Fricção de frenagem forçada do carro quando o jogador está FORA dele
+                mySpeed -= Math.sign(mySpeed) * 0.005 * dtMod;
+                if(Math.abs(mySpeed) < 0.006) mySpeed = 0;
+                
+                // Controles do Humano a Pé
+                let walkSpd = 0.08 * dtMod;
+                if (keys['KeyW'] || keys['ArrowUp']) {
+                    myHumanX += Math.sin(myHumanRotation) * walkSpd;
+                    myHumanZ += Math.cos(myHumanRotation) * walkSpd;
                 }
-
-                // Gravidade Aplicada ao Boneco
-                if (charY > 0 || charVY !== 0) {
-                    charVY -= 0.02; // Força da gravidade
-                    charY += charVY;
-                    
-                    if (charY <= 0) { // Bateu no chão
-                        charY = 0;
-                        charVY = 0;
-                    }
+                if (keys['KeyS'] || keys['ArrowDown']) {
+                    myHumanX -= Math.sin(myHumanRotation) * walkSpd;
+                    myHumanZ -= Math.cos(myHumanRotation) * walkSpd;
                 }
-
-                document.getElementById('speed').innerText = "A pé";
+                if (keys['KeyA'] || keys['ArrowLeft']) myHumanRotation += 0.05 * dtMod;
+                if (keys['KeyD'] || keys['ArrowRight']) myHumanRotation -= 0.05 * dtMod;
             }
 
-            // Atualiza os dados locais do seu próprio player para renderização e rede
-            if(players[myId]) {
-                players[myId].isInsideCar = isInsideCar;
-                players[myId].carX = carX; players[myId].carZ = carZ; players[myId].carRot = carRotation;
-                players[myId].charX = charX; players[myId].charY = charY; players[myId].charZ = charZ; players[myId].charRot = charRotation;
-            }
+            // O carro se move baseado na velocidade acumulada
+            myX += Math.sin(myRotation) * mySpeed * dtMod;
+            myZ += Math.cos(myRotation) * mySpeed * dtMod;
+
+            document.getElementById('speed').innerText = Math.floor(Math.abs(mySpeed) * 300);
         }
 
-        function animate() {
+        function animate(time) {
             requestAnimationFrame(animate);
 
-            updatePhysics();
+            if (!lastFrameTime) lastFrameTime = time;
+            let deltaTime = (time - lastFrameTime) / 1000;
+            lastFrameTime = time;
+            
+            if (deltaTime > 0.1) deltaTime = 0.1; 
+            let dtMod = deltaTime * 60; 
 
-            // Renderiza e posiciona os modelos de todos os jogadores
+            updatePhysics(dtMod);
+
             for (let id in players) {
                 let p = players[id];
+                if (!p.carMesh) continue;
 
-                // Atualiza o Carro
-                if(p.carMesh) {
-                    p.carMesh.position.set(p.carX, 0, p.carZ);
-                    p.carMesh.rotation.y = p.carRot;
-                }
-                
-                // Atualiza o Boneco
-                if(p.charMesh) {
-                    p.charMesh.position.set(p.charX, p.charY, p.charZ);
-                    p.charMesh.rotation.y = p.charRot;
-                    // Se o jogador estiver no carro, esconde o boneco
-                    p.charMesh.visible = !p.isInsideCar; 
+                if (id === myId) {
+                    // Seu próprio mundo
+                    p.carMesh.position.set(myX, 0, myZ);
+                    p.carMesh.rotation.y = myRotation;
+                    
+                    p.humanMesh.position.set(myHumanX, 0, myHumanZ);
+                    p.humanMesh.rotation.y = myHumanRotation;
+                    
+                    p.humanMesh.visible = !myIsDriving;
+                } else {
+                    // Mundo dos outros
+                    p.car.x += (p.car.targetX - p.car.x) * 0.2 * dtMod;
+                    p.car.z += (p.car.targetZ - p.car.z) * 0.2 * dtMod;
+                    let diffCar = p.car.targetRotation - p.car.rotation;
+                    while (diffCar < -Math.PI) diffCar += Math.PI * 2;
+                    while (diffCar > Math.PI) diffCar -= Math.PI * 2;
+                    p.car.rotation += diffCar * 0.2 * dtMod;
+
+                    p.carMesh.position.set(p.car.x, 0, p.car.z);
+                    p.carMesh.rotation.y = p.car.rotation;
+
+                    p.human.x += (p.human.targetX - p.human.x) * 0.2 * dtMod;
+                    p.human.z += (p.human.targetZ - p.human.z) * 0.2 * dtMod;
+                    let diffHum = p.human.targetRotation - p.human.rotation;
+                    while (diffHum < -Math.PI) diffHum += Math.PI * 2;
+                    while (diffHum > Math.PI) diffHum -= Math.PI * 2;
+                    p.human.rotation += diffHum * 0.2 * dtMod;
+
+                    p.humanMesh.position.set(p.human.x, 0, p.human.z);
+                    p.humanMesh.rotation.y = p.human.rotation;
+                    
+                    p.humanMesh.visible = !p.isDriving;
                 }
             }
 
-            // --- SISTEMA DE CÂMERA DINÂMICA ---
+            // Câmera segue o Veículo ou o Humano
             if(players[myId]) {
-                if (isInsideCar && players[myId].carMesh) {
-                    // Câmera segue o carro
-                    const offset = new THREE.Vector3(-Math.sin(carRotation) * 12, 6, -Math.cos(carRotation) * 12);
-                    camera.position.copy(players[myId].carMesh.position).add(offset);
-                    camera.lookAt(players[myId].carMesh.position);
-                } else if (!isInsideCar && players[myId].charMesh) {
-                    // Câmera segue o boneco mais de perto
-                    const offset = new THREE.Vector3(-Math.sin(charRotation) * 5, 4, -Math.cos(charRotation) * 5);
-                    const lookTarget = players[myId].charMesh.position.clone();
-                    lookTarget.y += 1; // Olha para a cabeça do boneco
-                    camera.position.copy(players[myId].charMesh.position).add(offset);
-                    camera.lookAt(lookTarget);
+                if (myIsDriving) {
+                    const myCar = players[myId].carMesh;
+                    const offset = new THREE.Vector3(-Math.sin(myRotation) * 12, 6, -Math.cos(myRotation) * 12);
+                    camera.position.copy(myCar.position).add(offset);
+                    camera.lookAt(myCar.position);
+                } else {
+                    const myBody = players[myId].humanMesh;
+                    const offset = new THREE.Vector3(-Math.sin(myHumanRotation) * 6, 4, -Math.cos(myHumanRotation) * 6);
+                    camera.position.copy(myBody.position).add(offset);
+                    camera.lookAt(myBody.position.clone().add(new THREE.Vector3(0, 1, 0)));
                 }
             }
 
-            // --- REDE: ENVIO DE DADOS ---
-            if (isHost) {
-                let statePayload = {};
-                for(let id in players) {
-                    statePayload[id] = { 
-                        name: players[id].name, color: players[id].color, 
-                        isInsideCar: players[id].isInsideCar,
-                        carX: players[id].carX, carZ: players[id].carZ, carRot: players[id].carRot,
-                        charX: players[id].charX, charY: players[id].charY, charZ: players[id].charZ, charRot: players[id].charRot
-                    };
+            // Transmissão da Rede
+            if (time - lastNetworkSend > NETWORK_TICK_RATE) {
+                lastNetworkSend = time;
+                
+                if (isHost) {
+                    let statePayload = {};
+                    for(let id in players) {
+                        let p = players[id];
+                        statePayload[id] = { 
+                            name: p.name, color: p.color, isDriving: p.isDriving,
+                            car: {
+                                x: (id === myId) ? myX : p.car.targetX, 
+                                z: (id === myId) ? myZ : p.car.targetZ, 
+                                rotation: (id === myId) ? myRotation : p.car.targetRotation 
+                            },
+                            human: {
+                                x: (id === myId) ? myHumanX : p.human.targetX, 
+                                z: (id === myId) ? myHumanZ : p.human.targetZ, 
+                                rotation: (id === myId) ? myHumanRotation : p.human.targetRotation 
+                            }
+                        };
+                    }
+                    clientConnections.forEach(conn => {
+                        if(conn.open) conn.send({ type: 'stateUpdate', playersData: statePayload });
+                    });
+                } else if (hostConnection && hostConnection.open) {
+                    hostConnection.send({ 
+                        type: 'update', id: myId, isDriving: myIsDriving,
+                        car: { x: myX, z: myZ, rotation: myRotation },
+                        human: { x: myHumanX, z: myHumanZ, rotation: myHumanRotation }
+                    });
                 }
-                clientConnections.forEach(conn => conn.send({ type: 'stateUpdate', playersData: statePayload }));
-            } else if (hostConnection && hostConnection.open) {
-                // Cliente envia pacote contendo posições do carro e do boneco
-                hostConnection.send({ 
-                    type: 'update', id: myId, 
-                    isInsideCar: isInsideCar,
-                    carX: carX, carZ: carZ, carRot: carRotation,
-                    charX: charX, charY: charY, charZ: charZ, charRot: charRotation
-                });
             }
 
             renderer.render(scene, camera);
