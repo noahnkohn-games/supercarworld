@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SuperCar World - Duas Cidades, Ponte e Drift Perfeito</title>
+    <title>SuperCar World - Colisões, Oceano e Ponte Real</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, sans-serif; background: #111; color: white; }
         #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
@@ -59,7 +59,7 @@
 
     <div id="ui-layer">
         <div class="menu-box">
-            <h1>SuperCar World (1.0.7.)</h1>
+            <h1>SuperCar World (1.0.8.)</h1>
             <input type="text" id="player-name" value="Piloto Teste" placeholder="Digite seu Nome" maxlength="12">
             
             <button class="btn-host" onclick="createRoom()">1. Criar Sala (Host)</button>
@@ -89,12 +89,14 @@
         let myColor = Math.floor(Math.random() * 16777215); 
         let players = {};
         
-        // Estado Físico Local
+        // Estado Físico Local (Carro)
         let myIsDriving = true;
         let mySpeed = 0;
         let myRotation = 0;
         let myX = 0;
         let myZ = 0;
+        let myCarY = 0;
+        let myCarVelocityY = 0;
         
         // Posição Humana
         let myHumanX = 0;
@@ -103,8 +105,9 @@
         let myHumanRotation = 0;
         let myHumanVelocityY = 0; 
 
-        // Sistema de Fumaça (Drift)
+        // Sistema de Fumaça (Drift) e Colisões
         let driftSmokeParticles = [];
+        const staticCollidables = []; // Lista de todos os prédios para colisão
 
         const keys = {};
         let lastFrameTime = 0;
@@ -114,7 +117,6 @@
         // --- SETUP GRÁFICO (THREE.JS) ---
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87ceeb);
-        // Névoa para não enxergar o fim do mapa
         scene.fog = new THREE.FogExp2(0x87ceeb, 0.001);
 
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 4000);
@@ -129,6 +131,44 @@
         const ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), new THREE.MeshStandardMaterial({ color: 0x2f7d3b }));
         ground.rotation.x = -Math.PI / 2;
         scene.add(ground);
+
+        // --- FUNÇÃO MATEMÁTICA DO CHÃO (OCEANO E PONTE) ---
+        function getFloorHeight(x, z) {
+            // Rampa da Cidade 1 subindo para a Ponte
+            if (x >= 430 && x < 450 && z >= -20 && z <= 20) {
+                return ((x - 430) / 20) * 1.0; 
+            }
+            // Rampa da Ponte descendo para a Cidade 2
+            if (x > 1150 && x <= 1170 && z >= -20 && z <= 20) {
+                return ((1170 - x) / 20) * 1.0;
+            }
+            // Corpo da Ponte
+            if (x >= 450 && x <= 1150 && z >= -20 && z <= 20) {
+                return 1.0;
+            }
+            // Caiu da ponte ou entrou no mar? Afunda!
+            if (x >= 430 && x <= 1170) {
+                return -1.5;
+            }
+            // Chão firme das cidades
+            return 0;
+        }
+
+        // --- VERIFICADOR DE COLISÃO ---
+        function checkCollision(newX, newZ, radius) {
+            for (let i = 0; i < staticCollidables.length; i++) {
+                let box = staticCollidables[i];
+                // Encontra o ponto do quadrado mais próximo ao círculo do jogador/carro
+                let closestX = Math.max(box.xMin, Math.min(newX, box.xMax));
+                let closestZ = Math.max(box.zMin, Math.min(newZ, box.zMax));
+                
+                // Calcula se bateu
+                if (((newX - closestX)**2 + (newZ - closestZ)**2) < (radius * radius)) {
+                    return true;
+                }
+            }
+            return false;
+        }
 
         // --- ENGENHARIA DE DUAS CIDADES, QUADRAS E PONTES ---
         const glassMat = new THREE.MeshStandardMaterial({ color: 0x88ccff, roughness: 0.1, metalness: 0.8 });
@@ -149,7 +189,7 @@
             door.position.set(0, 2.5, bDepth / 2 + 0.1);
             group.add(door);
 
-            // Grandes Janelas de Vidro (Otimizado para não travar o celular/PC)
+            // Grandes Janelas de Vidro
             const gW = bWidth - 8;
             const gH = bHeight - 10;
             
@@ -163,16 +203,21 @@
             glassR.position.set(bWidth/2 + 0.1, bHeight/2 + 2, 0);
             
             group.add(glassF, glassB, glassL, glassR);
-            group.position.set(x, 0.2, z); // Acima da calçada
+            group.position.set(x, 0.2, z); 
             scene.add(group);
+
+            // REGISTRA A COLISÃO DO PRÉDIO
+            staticCollidables.push({
+                xMin: x - bWidth/2, xMax: x + bWidth/2,
+                zMin: z - bDepth/2, zMax: z + bDepth/2
+            });
         }
 
         function createCity(offsetX, offsetZ) {
             const blockSize = 100;
             const streetWidth = 30;
-            const step = blockSize + streetWidth; // 130 de distância entre quarteirões
+            const step = blockSize + streetWidth;
             
-            // Asfalto da Cidade Inteira
             const cityRoadMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
             const cityRoad = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), cityRoadMat);
             cityRoad.rotation.x = -Math.PI / 2;
@@ -185,16 +230,13 @@
             
             for(let x = -390; x <= 390; x += step) {
                 for(let z = -390; z <= 390; z += step) {
-                    // Limpa a área de Spawn do jogador (Cidade 1)
                     if (offsetX === 0 && Math.abs(x) < 60 && Math.abs(z) < 60) continue;
                     
-                    // Calçada de 100x100
                     const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0x7f8c8d });
                     const sidewalk = new THREE.Mesh(new THREE.BoxGeometry(blockSize, 0.2, blockSize), sidewalkMat);
                     sidewalk.position.set(x + offsetX, 0.1, z + offsetZ);
                     scene.add(sidewalk);
                     
-                    // 4 Prédios dentro dessa Quadra
                     const bSize = 35;
                     createBuilding(x + offsetX - 20, z + offsetZ - 20, bSize, bSize);
                     createBuilding(x + offsetX + 20, z + offsetZ - 20, bSize, bSize);
@@ -203,59 +245,61 @@
                 }
             }
             
-            // Linhas Brancas Tracejadas nas Ruas Verticais
             for(let x = -390 - streetWidth/2; x <= 390 + streetWidth; x += step) {
                 for(let z = -450; z <= 450; z += 12) {
                     const line = new THREE.Mesh(lineGeoV, lineMat);
-                    line.rotation.x = -Math.PI / 2;
-                    line.position.set(x + offsetX, 0.06, z + offsetZ);
-                    scene.add(line);
+                    line.rotation.x = -Math.PI / 2; line.position.set(x + offsetX, 0.06, z + offsetZ); scene.add(line);
                 }
             }
-            // Linhas Brancas Tracejadas nas Ruas Horizontais
             for(let z = -390 - streetWidth/2; z <= 390 + streetWidth; z += step) {
                 for(let x = -450; x <= 450; x += 12) {
                     const line = new THREE.Mesh(lineGeoH, lineMat);
-                    line.rotation.x = -Math.PI / 2;
-                    line.position.set(x + offsetX, 0.06, z + offsetZ);
-                    scene.add(line);
+                    line.rotation.x = -Math.PI / 2; line.position.set(x + offsetX, 0.06, z + offsetZ); scene.add(line);
                 }
             }
         }
 
-        // Gera Cidade 1 e Cidade 2 (a 1600 metros de distância)
         createCity(0, 0); 
         createCity(1600, 0); 
 
-        // Oceano no meio
+        // Oceano
         const oceanMat = new THREE.MeshStandardMaterial({ color: 0x0984e3, transparent: true, opacity: 0.85, roughness: 0.1 });
         const ocean = new THREE.Mesh(new THREE.PlaneGeometry(700, 6000), oceanMat);
-        ocean.rotation.x = -Math.PI / 2;
-        ocean.position.set(800, 0.1, 0); // Fica entre 450 e 1150
+        ocean.rotation.x = -Math.PI / 2; ocean.position.set(800, 0.1, 0); 
         scene.add(ocean);
 
         // A Grande Ponte Conectando as Duas Cidades
         const bridgeMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
         const bridge = new THREE.Mesh(new THREE.BoxGeometry(700, 1, 40), bridgeMat);
-        bridge.position.set(800, 0.5, 0);
+        bridge.position.set(800, 0.5, 0); // Corpo central no alto
         scene.add(bridge);
+        
+        // Rampa 1 (Sobe da Cidade 1)
+        const ramp1 = new THREE.Mesh(new THREE.BoxGeometry(20.5, 1, 40), bridgeMat);
+        ramp1.position.set(440, 0.5, 0);
+        ramp1.rotation.z = Math.asin(1 / 20.5); 
+        scene.add(ramp1);
+
+        // Rampa 2 (Desce pra Cidade 2)
+        const ramp2 = new THREE.Mesh(new THREE.BoxGeometry(20.5, 1, 40), bridgeMat);
+        ramp2.position.set(1160, 0.5, 0);
+        ramp2.rotation.z = -Math.asin(1 / 20.5); 
+        scene.add(ramp2);
         
         // Linhas tracejadas na Ponte
         for(let x = 450; x <= 1150; x += 10) {
             const line = new THREE.Mesh(new THREE.PlaneGeometry(4, 1), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-            line.rotation.x = -Math.PI / 2;
-            line.position.set(x, 1.01, 0);
-            scene.add(line);
+            line.rotation.x = -Math.PI / 2; line.position.set(x, 1.01, 0); scene.add(line);
         }
 
         // --- SISTEMA DE FUMAÇA (DRIFT) ---
         const smokeGeo = new THREE.SphereGeometry(0.8, 6, 6);
-        function spawnDriftSmoke(x, z) {
+        function spawnDriftSmoke(x, z, y) {
             const smokeMat = new THREE.MeshBasicMaterial({ color: 0xdddddd, transparent: true, opacity: 0.4 });
             const puff = new THREE.Mesh(smokeGeo, smokeMat);
-            puff.position.set(x + (Math.random() - 0.5), 0.4, z + (Math.random() - 0.5));
+            puff.position.set(x + (Math.random() - 0.5), y + 0.4, z + (Math.random() - 0.5));
             scene.add(puff);
-            driftSmokeParticles.push({ mesh: puff, life: 5.0 }); // Dura 5 segundos
+            driftSmokeParticles.push({ mesh: puff, life: 5.0 }); 
         }
 
         // --- CONSTRUÇÃO DE OBJETOS COM NOME E PERNAS ---
@@ -316,7 +360,7 @@
             
             players[myId] = {
                 name: myName, color: myColor, isDriving: true,
-                car: { x: 0, z: 0, rotation: 0, targetX: 0, targetZ: 0, targetRotation: 0 },
+                car: { x: 0, y: 0, z: 0, rotation: 0, targetX: 0, targetY: 0, targetZ: 0, targetRotation: 0 },
                 human: { x: 0, y: 0, z: 0, rotation: 0, targetX: 0, targetY: 0, targetZ: 0, targetRotation: 0 },
                 carMesh: createCarMesh(myColor, myName),
                 humanMesh: createHumanMesh(myColor, myName)
@@ -337,7 +381,7 @@
                     if(data.type === 'join') {
                         players[data.id] = { 
                             name: data.name, color: data.color, isDriving: true,
-                            car: { x: 0, z: 0, rotation: 0, targetX: 0, targetZ: 0, targetRotation: 0 },
+                            car: { x: 0, y: 0, z: 0, rotation: 0, targetX: 0, targetY: 0, targetZ: 0, targetRotation: 0 },
                             human: { x: 0, y: 0, z: 0, rotation: 0, targetX: 0, targetY: 0, targetZ: 0, targetRotation: 0 },
                             carMesh: createCarMesh(data.color, data.name), humanMesh: createHumanMesh(data.color, data.name)
                         };
@@ -346,7 +390,7 @@
                     else if (data.type === 'update') {
                         if(players[data.id]) {
                             let p = players[data.id]; p.isDriving = data.isDriving;
-                            p.car.targetX = data.car.x; p.car.targetZ = data.car.z; p.car.targetRotation = data.car.rotation;
+                            p.car.targetX = data.car.x; p.car.targetY = data.car.y; p.car.targetZ = data.car.z; p.car.targetRotation = data.car.rotation;
                             p.human.targetX = data.human.x; p.human.targetY = data.human.y; p.human.targetZ = data.human.z; p.human.targetRotation = data.human.rotation;
                         }
                     }
@@ -380,14 +424,14 @@
                 if (!players[id]) {
                     players[id] = { 
                         name: sp.name, color: sp.color, isDriving: sp.isDriving,
-                        car: { x: sp.car.x, z: sp.car.z, rotation: sp.car.rotation, targetX: sp.car.x, targetZ: sp.car.z, targetRotation: sp.car.rotation },
+                        car: { x: sp.car.x, y: sp.car.y, z: sp.car.z, rotation: sp.car.rotation, targetX: sp.car.x, targetY: sp.car.y, targetZ: sp.car.z, targetRotation: sp.car.rotation },
                         human: { x: sp.human.x, y: sp.human.y, z: sp.human.z, rotation: sp.human.rotation, targetX: sp.human.x, targetY: sp.human.y, targetZ: sp.human.z, targetRotation: sp.human.rotation },
                         carMesh: createCarMesh(sp.color, sp.name), humanMesh: createHumanMesh(sp.color, sp.name)
                     };
                     players[id].humanMesh.visible = !sp.isDriving;
                 } else {
                     players[id].isDriving = sp.isDriving;
-                    players[id].car.targetX = sp.car.x; players[id].car.targetZ = sp.car.z; players[id].car.targetRotation = sp.car.rotation;
+                    players[id].car.targetX = sp.car.x; players[id].car.targetY = sp.car.y; players[id].car.targetZ = sp.car.z; players[id].car.targetRotation = sp.car.rotation;
                     players[id].human.targetX = sp.human.x; players[id].human.targetY = sp.human.y; players[id].human.targetZ = sp.human.z; players[id].human.targetRotation = sp.human.rotation;
                 }
             }
@@ -401,7 +445,11 @@
             if (!keys[e.code]) { 
                 if (e.code === 'KeyF') {
                     if (myIsDriving) {
-                        myIsDriving = false; myHumanX = myX + 2; myHumanZ = myZ; myHumanY = 0; myHumanRotation = myRotation;
+                        myIsDriving = false; 
+                        myHumanX = myX + 2; 
+                        myHumanZ = myZ; 
+                        myHumanY = getFloorHeight(myHumanX, myHumanZ); 
+                        myHumanRotation = myRotation;
                     } else {
                         let dist = Math.hypot(myHumanX - myX, myHumanZ - myZ);
                         if (dist < 4.0) myIsDriving = true;
@@ -412,7 +460,7 @@
         });
         window.addEventListener('keyup', (e) => keys[e.code] = false);
 
-        // --- FÍSICA CORRIGIDA PARA DRIFT ---
+        // --- FÍSICA AVANÇADA (COLISÃO, GRAVIDADE E DRIFT) ---
         function updatePhysics(dtMod) {
             let isTurning = keys['KeyA'] || keys['KeyD'] || keys['ArrowLeft'] || keys['ArrowRight'];
             let isHandbrake = keys['Space'];
@@ -426,26 +474,21 @@
                 } else if (isReversing) {
                     mySpeed -= 0.01 * dtMod;
                 } else if (!isHandbrake) {
-                    // Atrito natural
                     mySpeed -= Math.sign(mySpeed) * 0.005 * dtMod;
                 }
                 
-                // SISTEMA DE DRIFT E FREIO DE MÃO
                 if (isHandbrake) {
-                    // Se você está acelerando E virando rápido: É DRIFT! A velocidade se mantém.
                     if (isAccelerating && Math.abs(mySpeed) > 0.2 && isTurning) {
-                        // Perde apenas 0.001 de velocidade para dar o efeito que os pneus estão patinando
                         mySpeed -= Math.sign(mySpeed) * 0.001 * dtMod;
                     } else {
-                        // Se não estiver acelerando para dar drift, age como freio de emergência bruto
                         mySpeed -= Math.sign(mySpeed) * 0.015 * dtMod; 
                     }
                     
-                    // Se estiver rápido e virando, solta fumaça dos dois pneus traseiros
-                    if (Math.abs(mySpeed) > 0.2 && isTurning) {
+                    // Somente solta fumaça de drift se o carro não estiver debaixo da água
+                    if (myCarY >= 0 && Math.abs(mySpeed) > 0.2 && isTurning) {
                         let smokeX = myX - Math.sin(myRotation) * 1.5;
                         let smokeZ = myZ - Math.cos(myRotation) * 1.5;
-                        spawnDriftSmoke(smokeX, smokeZ);
+                        spawnDriftSmoke(smokeX, smokeZ, myCarY);
                     }
                 }
 
@@ -453,35 +496,89 @@
                 if(mySpeed > 0.8) mySpeed = 0.8;
                 if(mySpeed < -0.4) mySpeed = -0.4;
 
-                // Curvas mais agressivas durante o drift
                 if (Math.abs(mySpeed) > 0) {
                     let mod = mySpeed > 0 ? 1 : -1;
                     let driftTurnBoost = (isHandbrake && Math.abs(mySpeed) > 0.2) ? 1.6 : 1.0;
                     if (keys['KeyA'] || keys['ArrowLeft']) myRotation += 0.03 * mod * driftTurnBoost * dtMod;
                     if (keys['KeyD'] || keys['ArrowRight']) myRotation -= 0.03 * mod * driftTurnBoost * dtMod;
                 }
+
+                // Cálculo de Colisão para X e Z do Carro
+                let nextX = myX + Math.sin(myRotation) * mySpeed * dtMod;
+                let nextZ = myZ + Math.cos(myRotation) * mySpeed * dtMod;
+                
+                if (checkCollision(nextX, nextZ, 1.2)) {
+                    mySpeed = -mySpeed * 0.4; // Rebate ao bater no prédio
+                } else {
+                    myX = nextX;
+                    myZ = nextZ;
+                }
+
+                // Cálculo da Gravidade e Altura (Ponte e Água) do Carro
+                let floorY = getFloorHeight(myX, myZ);
+                if (myCarY > floorY) {
+                    myCarVelocityY -= 0.015 * dtMod; // Gravidade caindo
+                }
+                myCarY += myCarVelocityY * dtMod;
+                
+                if (myCarY <= floorY) { // Se tocou no chão/rampa/mar
+                    myCarY = floorY;
+                    myCarVelocityY = 0;
+                }
+
+                // Resistência se cair na água
+                if (myCarY < -0.5) {
+                    mySpeed *= 0.85; // Freio drástico na água
+                    if(Math.abs(mySpeed) < 0.02) mySpeed = 0;
+                }
+
             } else {
-                // Carro vazio freia
                 mySpeed -= Math.sign(mySpeed) * 0.005 * dtMod;
                 if(Math.abs(mySpeed) < 0.006) mySpeed = 0;
                 
-                // Controles a pé
+                // Controles a pé com colisão
                 let walkSpd = 0.08 * dtMod;
-                if (keys['KeyW'] || keys['ArrowUp']) { myHumanX += Math.sin(myHumanRotation) * walkSpd; myHumanZ += Math.cos(myHumanRotation) * walkSpd; }
-                if (keys['KeyS'] || keys['ArrowDown']) { myHumanX -= Math.sin(myHumanRotation) * walkSpd; myHumanZ -= Math.cos(myHumanRotation) * walkSpd; }
+                let nextHX = myHumanX;
+                let nextHZ = myHumanZ;
+                
+                if (keys['KeyW'] || keys['ArrowUp']) { nextHX += Math.sin(myHumanRotation) * walkSpd; nextHZ += Math.cos(myHumanRotation) * walkSpd; }
+                if (keys['KeyS'] || keys['ArrowDown']) { nextHX -= Math.sin(myHumanRotation) * walkSpd; nextHZ -= Math.cos(myHumanRotation) * walkSpd; }
                 if (keys['KeyA'] || keys['ArrowLeft']) myHumanRotation += 0.05 * dtMod;
                 if (keys['KeyD'] || keys['ArrowRight']) myHumanRotation -= 0.05 * dtMod;
 
-                // PULO
-                if (isHandbrake && myHumanY <= 0) myHumanVelocityY = 0.25; 
+                if (!checkCollision(nextHX, nextHZ, 0.4)) {
+                    myHumanX = nextHX;
+                    myHumanZ = nextHZ;
+                }
+
+                // PULO, PONTE E ÁGUA PARA O BONECO
+                let hFloorY = getFloorHeight(myHumanX, myHumanZ);
+                if (isHandbrake && myHumanY <= hFloorY) {
+                    myHumanVelocityY = 0.25; 
+                }
                 
                 myHumanY += myHumanVelocityY * dtMod;
                 myHumanVelocityY -= 0.015 * dtMod; 
-                if (myHumanY <= 0) { myHumanY = 0; myHumanVelocityY = 0; }
+                if (myHumanY <= hFloorY) { 
+                    myHumanY = hFloorY; 
+                    myHumanVelocityY = 0; 
+                }
             }
 
-            myX += Math.sin(myRotation) * mySpeed * dtMod;
-            myZ += Math.cos(myRotation) * mySpeed * dtMod;
+            // O carro vazio também pode afundar ou bater
+            if (!myIsDriving) {
+                let emptyCarFloorY = getFloorHeight(myX, myZ);
+                if (myCarY > emptyCarFloorY) {
+                    myCarVelocityY -= 0.015 * dtMod; 
+                }
+                myCarY += myCarVelocityY * dtMod;
+                if (myCarY <= emptyCarFloorY) {
+                    myCarY = emptyCarFloorY;
+                    myCarVelocityY = 0;
+                }
+                myX += Math.sin(myRotation) * mySpeed * dtMod;
+                myZ += Math.cos(myRotation) * mySpeed * dtMod;
+            }
 
             document.getElementById('speed').innerText = Math.floor(Math.abs(mySpeed) * 300);
         }
@@ -513,12 +610,17 @@
                 if (!p.carMesh) continue;
 
                 if (id === myId) {
-                    p.carMesh.position.set(myX, 0, myZ); p.carMesh.rotation.y = myRotation;
-                    p.humanMesh.position.set(myHumanX, myHumanY, myHumanZ); p.humanMesh.rotation.y = myHumanRotation;
+                    p.carMesh.position.set(myX, myCarY, myZ); 
+                    p.carMesh.rotation.y = myRotation;
+                    
+                    p.humanMesh.position.set(myHumanX, myHumanY, myHumanZ); 
+                    p.humanMesh.rotation.y = myHumanRotation;
+                    
                     p.humanMesh.visible = !myIsDriving;
 
                     let moving = !myIsDriving && (keys['KeyW'] || keys['KeyS'] || keys['ArrowUp'] || keys['ArrowDown']);
-                    if(moving && myHumanY <= 0) {
+                    let hFloorY = getFloorHeight(myHumanX, myHumanZ);
+                    if(moving && myHumanY <= hFloorY) {
                         p.humanMesh.userData.legL.rotation.x = Math.sin(timeSec * 15) * 0.5;
                         p.humanMesh.userData.legR.rotation.x = -Math.sin(timeSec * 15) * 0.5;
                     } else {
@@ -526,22 +628,30 @@
                         p.humanMesh.userData.legR.rotation.x = 0;
                     }
                 } else {
-                    p.car.x += (p.car.targetX - p.car.x) * 0.2 * dtMod; p.car.z += (p.car.targetZ - p.car.z) * 0.2 * dtMod;
+                    p.car.x += (p.car.targetX - p.car.x) * 0.2 * dtMod; 
+                    p.car.y += (p.car.targetY - p.car.y) * 0.2 * dtMod; 
+                    p.car.z += (p.car.targetZ - p.car.z) * 0.2 * dtMod;
                     let diffCar = p.car.targetRotation - p.car.rotation;
                     while (diffCar < -Math.PI) diffCar += Math.PI * 2; while (diffCar > Math.PI) diffCar -= Math.PI * 2;
                     p.car.rotation += diffCar * 0.2 * dtMod;
-                    p.carMesh.position.set(p.car.x, 0, p.car.z); p.carMesh.rotation.y = p.car.rotation;
+                    p.carMesh.position.set(p.car.x, p.car.y, p.car.z); 
+                    p.carMesh.rotation.y = p.car.rotation;
 
                     let oldX = p.human.x; let oldZ = p.human.z;
-                    p.human.x += (p.human.targetX - p.human.x) * 0.2 * dtMod; p.human.y += (p.human.targetY - p.human.y) * 0.3 * dtMod; p.human.z += (p.human.targetZ - p.human.z) * 0.2 * dtMod;
+                    p.human.x += (p.human.targetX - p.human.x) * 0.2 * dtMod; 
+                    p.human.y += (p.human.targetY - p.human.y) * 0.3 * dtMod; 
+                    p.human.z += (p.human.targetZ - p.human.z) * 0.2 * dtMod;
+                    
                     let diffHum = p.human.targetRotation - p.human.rotation;
                     while (diffHum < -Math.PI) diffHum += Math.PI * 2; while (diffHum > Math.PI) diffHum -= Math.PI * 2;
                     p.human.rotation += diffHum * 0.2 * dtMod;
-                    p.humanMesh.position.set(p.human.x, p.human.y, p.human.z); p.humanMesh.rotation.y = p.human.rotation;
+                    p.humanMesh.position.set(p.human.x, p.human.y, p.human.z); 
+                    p.humanMesh.rotation.y = p.human.rotation;
                     p.humanMesh.visible = !p.isDriving;
 
                     let isMovingRemotely = Math.abs(p.human.x - oldX) > 0.01 || Math.abs(p.human.z - oldZ) > 0.01;
-                    if(!p.isDriving && isMovingRemotely && p.human.y < 0.2) {
+                    let theirFloorY = getFloorHeight(p.human.x, p.human.z);
+                    if(!p.isDriving && isMovingRemotely && p.human.y <= theirFloorY + 0.2) {
                         p.humanMesh.userData.legL.rotation.x = Math.sin(timeSec * 15) * 0.5;
                         p.humanMesh.userData.legR.rotation.x = -Math.sin(timeSec * 15) * 0.5;
                     } else {
@@ -570,13 +680,13 @@
                         let p = players[id];
                         statePayload[id] = { 
                             name: p.name, color: p.color, isDriving: p.isDriving,
-                            car: { x: (id === myId) ? myX : p.car.targetX, z: (id === myId) ? myZ : p.car.targetZ, rotation: (id === myId) ? myRotation : p.car.targetRotation },
+                            car: { x: (id === myId) ? myX : p.car.targetX, y: (id === myId) ? myCarY : p.car.targetY, z: (id === myId) ? myZ : p.car.targetZ, rotation: (id === myId) ? myRotation : p.car.targetRotation },
                             human: { x: (id === myId) ? myHumanX : p.human.targetX, y: (id === myId) ? myHumanY : p.human.targetY, z: (id === myId) ? myHumanZ : p.human.targetZ, rotation: (id === myId) ? myHumanRotation : p.human.targetRotation }
                         };
                     }
                     clientConnections.forEach(conn => { if(conn.open) conn.send({ type: 'stateUpdate', playersData: statePayload }); });
                 } else if (hostConnection && hostConnection.open) {
-                    hostConnection.send({ type: 'update', id: myId, isDriving: myIsDriving, car: { x: myX, z: myZ, rotation: myRotation }, human: { x: myHumanX, y: myHumanY, z: myHumanZ, rotation: myHumanRotation } });
+                    hostConnection.send({ type: 'update', id: myId, isDriving: myIsDriving, car: { x: myX, y: myCarY, z: myZ, rotation: myRotation }, human: { x: myHumanX, y: myHumanY, z: myHumanZ, rotation: myHumanRotation } });
                 }
             }
             renderer.render(scene, camera);
