@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SuperCar World - Multiplayer (1.0.5</title>
+    <title>SuperCar World - Drift, Pulos e Cidade Grande</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, sans-serif; background: #111; color: white; }
         #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
@@ -16,7 +16,7 @@
         .menu-box {
             background: rgba(255, 255, 255, 0.08); backdrop-filter: blur(12px);
             padding: 30px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15); 
-            width: 320px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            width: 340px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
         }
         h1 { color: #e67e22; font-size: 22px; margin-top: 0; letter-spacing: 1px;}
         input {
@@ -74,7 +74,7 @@
 
     <div id="hud">
         Velocidade: <span id="speed" class="hud-val">0</span> km/h
-        <small>F - Entrar/Sair do Veículo</small>
+        <small>F - Entrar/Sair | ESPAÇO - Drift/Pular</small>
     </div>
     <div id="canvas-container"></div>
 
@@ -86,7 +86,7 @@
         let clientConnections = [];
         
         let myName = "";
-        let myColor = Math.floor(Math.random() * 16777215); // Cor aleatória
+        let myColor = Math.floor(Math.random() * 16777215); 
         let players = {};
         
         // Estado Físico Local
@@ -96,9 +96,15 @@
         let myX = 0;
         let myZ = 0;
         
+        // Posição Humana
         let myHumanX = 0;
+        let myHumanY = 0; // Adicionado eixo Y para o pulo
         let myHumanZ = 0;
         let myHumanRotation = 0;
+        let myHumanVelocityY = 0; // Velocidade de pulo/gravidade
+
+        // Sistema de Fumaça (Drift)
+        let driftSmokeParticles = [];
 
         const keys = {};
         let lastFrameTime = 0;
@@ -114,26 +120,82 @@
         document.getElementById('canvas-container').appendChild(renderer.domElement);
 
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); scene.add(ambientLight);
-        const sunLight = new THREE.DirectionalLight(0xfffaf0, 1.0); sunLight.position.set(100, 200, 50); scene.add(sunLight);
+        const sunLight = new THREE.DirectionalLight(0xfffaf0, 1.0); sunLight.position.set(150, 300, 100); scene.add(sunLight);
 
-        // Chão e Cidade
-        const ground = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshStandardMaterial({ color: 0x2f7d3b }));
+        // Chão maior para o mapa expandido
+        const ground = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), new THREE.MeshStandardMaterial({ color: 0x2f7d3b }));
         ground.rotation.x = -Math.PI / 2;
         scene.add(ground);
 
-        for(let x = -200; x <= 200; x+= 40) {
-            for(let z = -200; z <= 200; z+= 40) {
-                if(Math.abs(x) < 20 && Math.abs(z) < 20) continue;
-                let building = new THREE.Mesh(
-                    new THREE.BoxGeometry(25, Math.random() * 20 + 10, 25), 
-                    new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff })
-                );
-                building.position.set(x, building.geometry.parameters.height/2, z);
-                scene.add(building);
+        // --- CONSTRUÇÃO DE PRÉDIOS E CENÁRIO ---
+        function createBuilding(x, z) {
+            const group = new THREE.Group();
+            const bWidth = 20;
+            const bDepth = 20;
+            const bHeight = Math.random() * 25 + 15;
+            
+            const bColor = Math.random() * 0xffffff;
+            const building = new THREE.Mesh(new THREE.BoxGeometry(bWidth, bHeight, bDepth), new THREE.MeshStandardMaterial({ color: bColor }));
+            building.position.y = bHeight / 2;
+            group.add(building);
+
+            // Porta do prédio
+            const door = new THREE.Mesh(new THREE.BoxGeometry(4, 5, 0.5), new THREE.MeshStandardMaterial({ color: 0x3e2723 }));
+            door.position.set(0, 2.5, bDepth / 2 + 0.1);
+            group.add(door);
+
+            // Janelas instanciadas
+            const winMat = new THREE.MeshStandardMaterial({ color: 0x88ccff, roughness: 0.1, metalness: 0.8 });
+            for(let wy = 8; wy < bHeight - 3; wy += 6) {
+                for(let wx = -6; wx <= 6; wx += 6) {
+                    // Janelas da frente
+                    const winF = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 0.2), winMat);
+                    winF.position.set(wx, wy, bDepth / 2 + 0.1);
+                    group.add(winF);
+                    // Janelas de trás
+                    const winB = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 0.2), winMat);
+                    winB.position.set(wx, wy, -bDepth / 2 - 0.1);
+                    group.add(winB);
+                    // Janelas esquerda e direita
+                    const winL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 3, 3), winMat);
+                    winL.position.set(-bWidth / 2 - 0.1, wy, wx);
+                    group.add(winL);
+                    const winR = new THREE.Mesh(new THREE.BoxGeometry(0.2, 3, 3), winMat);
+                    winR.position.set(bWidth / 2 + 0.1, wy, wx);
+                    group.add(winR);
+                }
+            }
+            
+            group.position.set(x, 0, z);
+            scene.add(group);
+        }
+
+        // Mapa expandido de -400 a 400
+        for(let x = -400; x <= 400; x += 50) {
+            for(let z = -400; z <= 400; z += 50) {
+                // Deixa o centro principal livre para dar respawn
+                if(Math.abs(x) < 40 && Math.abs(z) < 40) continue;
+                // Chance de 70% de nascer um prédio ali, cria caminhos orgânicos
+                if(Math.random() < 0.7) {
+                    createBuilding(x, z);
+                }
             }
         }
 
-        // --- CONSTRUÇÃO DE OBJETOS COM NOME ---
+        // --- SISTEMA DE FUMAÇA (DRIFT) ---
+        const smokeGeo = new THREE.SphereGeometry(0.6, 6, 6);
+        function spawnDriftSmoke(x, z) {
+            const smokeMat = new THREE.MeshBasicMaterial({ color: 0xdddddd, transparent: true, opacity: 0.4 });
+            const puff = new THREE.Mesh(smokeGeo, smokeMat);
+            
+            // Nasce um pouquinho espalhado para ficar natural
+            puff.position.set(x + (Math.random() - 0.5), 0.4, z + (Math.random() - 0.5));
+            scene.add(puff);
+            
+            driftSmokeParticles.push({ mesh: puff, life: 5.0 }); // Dura 5 segundos
+        }
+
+        // --- CONSTRUÇÃO DE OBJETOS COM NOME E PERNAS ---
         function makeNameTag(name) {
             const canvas = document.createElement('canvas');
             canvas.width = 256; canvas.height = 64;
@@ -156,7 +218,6 @@
             return sprite;
         }
 
-        // Modelo do Carro
         function createCarMesh(colorHex, playerName) {
             const group = new THREE.Group();
             const body = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 4), new THREE.MeshStandardMaterial({ color: colorHex }));
@@ -173,18 +234,30 @@
             return group;
         }
 
-        // Modelo do Personagem Humano
         function createHumanMesh(colorHex, playerName) {
             const group = new THREE.Group();
             
+            // Corpo levantado para acomodar as pernas
             const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.3), new THREE.MeshStandardMaterial({ color: colorHex }));
-            body.position.y = 0.65;
+            body.position.y = 1.05;
             const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshStandardMaterial({ color: 0xffdbac }));
-            head.position.y = 1.2;
-            group.add(body, head);
+            head.position.y = 1.6;
+            
+            // Pernas
+            const legMat = new THREE.MeshStandardMaterial({ color: 0x2233aa });
+            const legL = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.6, 0.28), legMat);
+            legL.position.set(-0.15, 0.4, 0);
+            const legR = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.6, 0.28), legMat);
+            legR.position.set(0.15, 0.4, 0);
+            
+            group.add(body, head, legL, legR);
+            
+            // Salvamos as pernas para conseguir anima-las depois no Loop
+            group.userData.legL = legL;
+            group.userData.legR = legR;
             
             const tag = makeNameTag(playerName);
-            tag.position.y = 2.0;
+            tag.position.y = 2.5;
             group.add(tag);
             
             scene.add(group);
@@ -197,6 +270,7 @@
         }
 
         function startGameEngine() {
+            console.log("[GERAL] Iniciando engine gráfica...");
             document.getElementById('ui-layer').style.display = 'none';
             document.getElementById('hud').style.display = 'block';
             
@@ -212,7 +286,7 @@
             players[myId] = {
                 name: myName, color: myColor, isDriving: true,
                 car: { x: 0, z: 0, rotation: 0, targetX: 0, targetZ: 0, targetRotation: 0 },
-                human: { x: 0, z: 0, rotation: 0, targetX: 0, targetZ: 0, targetRotation: 0 },
+                human: { x: 0, y: 0, z: 0, rotation: 0, targetX: 0, targetY: 0, targetZ: 0, targetRotation: 0 },
                 carMesh: createCarMesh(myColor, myName),
                 humanMesh: createHumanMesh(myColor, myName)
             };
@@ -243,7 +317,7 @@
                         players[data.id] = { 
                             name: data.name, color: data.color, isDriving: true,
                             car: { x: 0, z: 0, rotation: 0, targetX: 0, targetZ: 0, targetRotation: 0 },
-                            human: { x: 0, z: 0, rotation: 0, targetX: 0, targetZ: 0, targetRotation: 0 },
+                            human: { x: 0, y: 0, z: 0, rotation: 0, targetX: 0, targetY: 0, targetZ: 0, targetRotation: 0 },
                             carMesh: createCarMesh(data.color, data.name),
                             humanMesh: createHumanMesh(data.color, data.name)
                         };
@@ -257,6 +331,7 @@
                             p.car.targetZ = data.car.z;
                             p.car.targetRotation = data.car.rotation;
                             p.human.targetX = data.human.x;
+                            p.human.targetY = data.human.y;
                             p.human.targetZ = data.human.z;
                             p.human.targetRotation = data.human.rotation;
                         }
@@ -310,7 +385,6 @@
             });
         }
 
-        // Atualiza a visão do Cliente baseado no que o Host envia
         function syncWorldState(serverPlayers) {
             for (let id in serverPlayers) {
                 if (id === myId) continue;
@@ -320,7 +394,7 @@
                     players[id] = { 
                         name: sp.name, color: sp.color, isDriving: sp.isDriving,
                         car: { x: sp.car.x, z: sp.car.z, rotation: sp.car.rotation, targetX: sp.car.x, targetZ: sp.car.z, targetRotation: sp.car.rotation },
-                        human: { x: sp.human.x, z: sp.human.z, rotation: sp.human.rotation, targetX: sp.human.x, targetZ: sp.human.z, targetRotation: sp.human.rotation },
+                        human: { x: sp.human.x, y: sp.human.y, z: sp.human.z, rotation: sp.human.rotation, targetX: sp.human.x, targetY: sp.human.y, targetZ: sp.human.z, targetRotation: sp.human.rotation },
                         carMesh: createCarMesh(sp.color, sp.name),
                         humanMesh: createHumanMesh(sp.color, sp.name)
                     };
@@ -331,12 +405,12 @@
                     players[id].car.targetZ = sp.car.z;
                     players[id].car.targetRotation = sp.car.rotation;
                     players[id].human.targetX = sp.human.x;
+                    players[id].human.targetY = sp.human.y;
                     players[id].human.targetZ = sp.human.z;
                     players[id].human.targetRotation = sp.human.rotation;
                 }
             }
             
-            // Remove quem saiu
             for (let id in players) {
                 if (id !== myId && !serverPlayers[id]) {
                     scene.remove(players[id].carMesh);
@@ -348,20 +422,17 @@
 
         // --- ENTRADA (TECLADO E AÇÕES) ---
         window.addEventListener('keydown', (e) => {
-            if (!keys[e.code]) { // Garante que segurar o botão não fará a ação se repetir infinitamente
+            if (!keys[e.code]) { 
                 if (e.code === 'KeyF') {
                     if (myIsDriving) {
-                        // Sair do Carro
                         myIsDriving = false;
-                        myHumanX = myX + 2; // Spawn do lado de fora da porta
+                        myHumanX = myX + 2; 
                         myHumanZ = myZ;
+                        myHumanY = 0; // Garante que nasce no chão
                         myHumanRotation = myRotation;
                     } else {
-                        // Entrar no Carro (Calcula distância matemática até a porta)
                         let dist = Math.hypot(myHumanX - myX, myHumanZ - myZ);
-                        if (dist < 4.0) {
-                            myIsDriving = true;
-                        }
+                        if (dist < 4.0) myIsDriving = true;
                     }
                 }
             }
@@ -371,29 +442,44 @@
 
         // --- FÍSICA E ANIMAÇÃO ---
         function updatePhysics(dtMod) {
-            
+            let isTurning = keys['KeyA'] || keys['KeyD'] || keys['ArrowLeft'] || keys['ArrowRight'];
+            let isHandbrake = keys['Space'];
+
             if (myIsDriving) {
-                // Controles do Carro
-                if (keys['KeyW'] || keys['ArrowUp']) {
-                    mySpeed += 0.01 * dtMod;
-                } else if (keys['KeyS'] || keys['ArrowDown']) {
-                    mySpeed -= 0.01 * dtMod;
-                } else {
-                    // Atrito SOMENTE quando nenhum botão estiver pressionado
+                // Acelerar e Ré
+                if (keys['KeyW'] || keys['ArrowUp']) mySpeed += 0.01 * dtMod;
+                else if (keys['KeyS'] || keys['ArrowDown']) mySpeed -= 0.01 * dtMod;
+                else if (!isHandbrake) {
+                    // Atrito normal se não estiver freando
                     mySpeed -= Math.sign(mySpeed) * 0.005 * dtMod;
-                    if(Math.abs(mySpeed) < 0.006) mySpeed = 0;
                 }
                 
+                // FREIO DE MÃO
+                if (isHandbrake) {
+                    mySpeed -= Math.sign(mySpeed) * 0.015 * dtMod; // Freia MUITO mais rápido
+                    
+                    // LÓGICA DE DRIFT
+                    // Se estiver rápido, virando e puxando o freio, ele dá drift!
+                    if (Math.abs(mySpeed) > 0.2 && isTurning) {
+                        // Calcula posição dos pneus traseiros
+                        let smokeX = myX - Math.sin(myRotation) * 1.5;
+                        let smokeZ = myZ - Math.cos(myRotation) * 1.5;
+                        spawnDriftSmoke(smokeX, smokeZ);
+                    }
+                }
+
+                if(Math.abs(mySpeed) < 0.006) mySpeed = 0;
                 if(mySpeed > 0.8) mySpeed = 0.8;
                 if(mySpeed < -0.4) mySpeed = -0.4;
 
+                // Curvas
                 if (Math.abs(mySpeed) > 0) {
                     let mod = mySpeed > 0 ? 1 : -1;
                     if (keys['KeyA'] || keys['ArrowLeft']) myRotation += 0.03 * mod * dtMod;
                     if (keys['KeyD'] || keys['ArrowRight']) myRotation -= 0.03 * mod * dtMod;
                 }
             } else {
-                // Fricção de frenagem forçada do carro quando o jogador está FORA dele
+                // Fricção de frenagem forçada do carro vazio
                 mySpeed -= Math.sign(mySpeed) * 0.005 * dtMod;
                 if(Math.abs(mySpeed) < 0.006) mySpeed = 0;
                 
@@ -409,9 +495,23 @@
                 }
                 if (keys['KeyA'] || keys['ArrowLeft']) myHumanRotation += 0.05 * dtMod;
                 if (keys['KeyD'] || keys['ArrowRight']) myHumanRotation -= 0.05 * dtMod;
+
+                // PULO (GRAVIDADE)
+                if (isHandbrake && myHumanY <= 0) { // Se apertar espaço no chão
+                    myHumanVelocityY = 0.25; // Força do pulo
+                }
+                
+                // Aplica Gravidade e Move
+                myHumanY += myHumanVelocityY * dtMod;
+                myHumanVelocityY -= 0.015 * dtMod; // Puxando pra baixo
+                
+                // Colisão com o chão
+                if (myHumanY <= 0) {
+                    myHumanY = 0;
+                    myHumanVelocityY = 0;
+                }
             }
 
-            // O carro se move baseado na velocidade acumulada
             myX += Math.sin(myRotation) * mySpeed * dtMod;
             myZ += Math.cos(myRotation) * mySpeed * dtMod;
 
@@ -429,6 +529,22 @@
             let dtMod = deltaTime * 60; 
 
             updatePhysics(dtMod);
+            
+            let timeSec = time / 1000;
+
+            // ATUALIZA FUMAÇA DO DRIFT
+            for(let i = driftSmokeParticles.length - 1; i >= 0; i--) {
+                let p = driftSmokeParticles[i];
+                p.life -= deltaTime;
+                p.mesh.position.y += 0.6 * deltaTime; // Sobe lentamente
+                p.mesh.scale.multiplyScalar(1.02); // Expande
+                p.mesh.material.opacity = (p.life / 5.0) * 0.4; // Fica transparente
+                
+                if(p.life <= 0) {
+                    scene.remove(p.mesh);
+                    driftSmokeParticles.splice(i, 1);
+                }
+            }
 
             for (let id in players) {
                 let p = players[id];
@@ -439,10 +555,21 @@
                     p.carMesh.position.set(myX, 0, myZ);
                     p.carMesh.rotation.y = myRotation;
                     
-                    p.humanMesh.position.set(myHumanX, 0, myHumanZ);
+                    p.humanMesh.position.set(myHumanX, myHumanY, myHumanZ);
                     p.humanMesh.rotation.y = myHumanRotation;
                     
                     p.humanMesh.visible = !myIsDriving;
+
+                    // Animação das Suas Pernas
+                    let moving = !myIsDriving && (keys['KeyW'] || keys['KeyS'] || keys['ArrowUp'] || keys['ArrowDown']);
+                    if(moving && myHumanY <= 0) {
+                        p.humanMesh.userData.legL.rotation.x = Math.sin(timeSec * 15) * 0.5;
+                        p.humanMesh.userData.legR.rotation.x = -Math.sin(timeSec * 15) * 0.5;
+                    } else {
+                        p.humanMesh.userData.legL.rotation.x = 0;
+                        p.humanMesh.userData.legR.rotation.x = 0;
+                    }
+
                 } else {
                     // Mundo dos outros
                     p.car.x += (p.car.targetX - p.car.x) * 0.2 * dtMod;
@@ -455,21 +582,35 @@
                     p.carMesh.position.set(p.car.x, 0, p.car.z);
                     p.carMesh.rotation.y = p.car.rotation;
 
+                    let oldX = p.human.x;
+                    let oldZ = p.human.z;
+
                     p.human.x += (p.human.targetX - p.human.x) * 0.2 * dtMod;
+                    p.human.y += (p.human.targetY - p.human.y) * 0.3 * dtMod; // Interpolando o Pulo
                     p.human.z += (p.human.targetZ - p.human.z) * 0.2 * dtMod;
                     let diffHum = p.human.targetRotation - p.human.rotation;
                     while (diffHum < -Math.PI) diffHum += Math.PI * 2;
                     while (diffHum > Math.PI) diffHum -= Math.PI * 2;
                     p.human.rotation += diffHum * 0.2 * dtMod;
 
-                    p.humanMesh.position.set(p.human.x, 0, p.human.z);
+                    p.humanMesh.position.set(p.human.x, p.human.y, p.human.z);
                     p.humanMesh.rotation.y = p.human.rotation;
                     
                     p.humanMesh.visible = !p.isDriving;
+
+                    // Animação das Pernas dos Amigos (Se eles estiverem trocando de posição, as pernas balançam)
+                    let isMovingRemotely = Math.abs(p.human.x - oldX) > 0.01 || Math.abs(p.human.z - oldZ) > 0.01;
+                    if(!p.isDriving && isMovingRemotely && p.human.y < 0.2) {
+                        p.humanMesh.userData.legL.rotation.x = Math.sin(timeSec * 15) * 0.5;
+                        p.humanMesh.userData.legR.rotation.x = -Math.sin(timeSec * 15) * 0.5;
+                    } else {
+                        p.humanMesh.userData.legL.rotation.x = 0;
+                        p.humanMesh.userData.legR.rotation.x = 0;
+                    }
                 }
             }
 
-            // Câmera segue o Veículo ou o Humano
+            // Câmera
             if(players[myId]) {
                 if (myIsDriving) {
                     const myCar = players[myId].carMesh;
@@ -501,6 +642,7 @@
                             },
                             human: {
                                 x: (id === myId) ? myHumanX : p.human.targetX, 
+                                y: (id === myId) ? myHumanY : p.human.targetY, 
                                 z: (id === myId) ? myHumanZ : p.human.targetZ, 
                                 rotation: (id === myId) ? myHumanRotation : p.human.targetRotation 
                             }
@@ -513,7 +655,7 @@
                     hostConnection.send({ 
                         type: 'update', id: myId, isDriving: myIsDriving,
                         car: { x: myX, z: myZ, rotation: myRotation },
-                        human: { x: myHumanX, z: myHumanZ, rotation: myHumanRotation }
+                        human: { x: myHumanX, y: myHumanY, z: myHumanZ, rotation: myHumanRotation }
                     });
                 }
             }
