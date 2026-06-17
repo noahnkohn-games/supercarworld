@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SuperCar World - Drift, Pulos e Cidade Grande</title>
+    <title>SuperCar World - Duas Cidades, Ponte e Drift Perfeito</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, sans-serif; background: #111; color: white; }
         #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
@@ -59,7 +59,7 @@
 
     <div id="ui-layer">
         <div class="menu-box">
-            <h1>SuperCar World (1.0.6</h1>
+            <h1>SuperCar World (1.0.7.)</h1>
             <input type="text" id="player-name" value="Piloto Teste" placeholder="Digite seu Nome" maxlength="12">
             
             <button class="btn-host" onclick="createRoom()">1. Criar Sala (Host)</button>
@@ -98,10 +98,10 @@
         
         // Posição Humana
         let myHumanX = 0;
-        let myHumanY = 0; // Adicionado eixo Y para o pulo
+        let myHumanY = 0; 
         let myHumanZ = 0;
         let myHumanRotation = 0;
-        let myHumanVelocityY = 0; // Velocidade de pulo/gravidade
+        let myHumanVelocityY = 0; 
 
         // Sistema de Fumaça (Drift)
         let driftSmokeParticles = [];
@@ -114,7 +114,10 @@
         // --- SETUP GRÁFICO (THREE.JS) ---
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87ceeb);
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
+        // Névoa para não enxergar o fim do mapa
+        scene.fog = new THREE.FogExp2(0x87ceeb, 0.001);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 4000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.getElementById('canvas-container').appendChild(renderer.domElement);
@@ -122,76 +125,136 @@
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); scene.add(ambientLight);
         const sunLight = new THREE.DirectionalLight(0xfffaf0, 1.0); sunLight.position.set(150, 300, 100); scene.add(sunLight);
 
-        // Chão maior para o mapa expandido
-        const ground = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), new THREE.MeshStandardMaterial({ color: 0x2f7d3b }));
+        // Chão Gigante
+        const ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), new THREE.MeshStandardMaterial({ color: 0x2f7d3b }));
         ground.rotation.x = -Math.PI / 2;
         scene.add(ground);
 
-        // --- CONSTRUÇÃO DE PRÉDIOS E CENÁRIO ---
-        function createBuilding(x, z) {
+        // --- ENGENHARIA DE DUAS CIDADES, QUADRAS E PONTES ---
+        const glassMat = new THREE.MeshStandardMaterial({ color: 0x88ccff, roughness: 0.1, metalness: 0.8 });
+        const doorMat = new THREE.MeshStandardMaterial({ color: 0x3e2723 });
+        const colors = [0xd1d1d1, 0xa3a3a3, 0xc48474, 0x617585, 0xe3dec9, 0xf6d6ad];
+
+        function createBuilding(x, z, bWidth, bDepth) {
             const group = new THREE.Group();
-            const bWidth = 20;
-            const bDepth = 20;
             const bHeight = Math.random() * 25 + 15;
+            const bColor = colors[Math.floor(Math.random() * colors.length)];
             
-            const bColor = Math.random() * 0xffffff;
             const building = new THREE.Mesh(new THREE.BoxGeometry(bWidth, bHeight, bDepth), new THREE.MeshStandardMaterial({ color: bColor }));
             building.position.y = bHeight / 2;
             group.add(building);
 
-            // Porta do prédio
-            const door = new THREE.Mesh(new THREE.BoxGeometry(4, 5, 0.5), new THREE.MeshStandardMaterial({ color: 0x3e2723 }));
+            // Porta do Prédio
+            const door = new THREE.Mesh(new THREE.BoxGeometry(4, 5, 0.5), doorMat);
             door.position.set(0, 2.5, bDepth / 2 + 0.1);
             group.add(door);
 
-            // Janelas instanciadas
-            const winMat = new THREE.MeshStandardMaterial({ color: 0x88ccff, roughness: 0.1, metalness: 0.8 });
-            for(let wy = 8; wy < bHeight - 3; wy += 6) {
-                for(let wx = -6; wx <= 6; wx += 6) {
-                    // Janelas da frente
-                    const winF = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 0.2), winMat);
-                    winF.position.set(wx, wy, bDepth / 2 + 0.1);
-                    group.add(winF);
-                    // Janelas de trás
-                    const winB = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 0.2), winMat);
-                    winB.position.set(wx, wy, -bDepth / 2 - 0.1);
-                    group.add(winB);
-                    // Janelas esquerda e direita
-                    const winL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 3, 3), winMat);
-                    winL.position.set(-bWidth / 2 - 0.1, wy, wx);
-                    group.add(winL);
-                    const winR = new THREE.Mesh(new THREE.BoxGeometry(0.2, 3, 3), winMat);
-                    winR.position.set(bWidth / 2 + 0.1, wy, wx);
-                    group.add(winR);
-                }
-            }
+            // Grandes Janelas de Vidro (Otimizado para não travar o celular/PC)
+            const gW = bWidth - 8;
+            const gH = bHeight - 10;
             
-            group.position.set(x, 0, z);
+            const glassF = new THREE.Mesh(new THREE.BoxGeometry(gW, gH, 0.2), glassMat);
+            glassF.position.set(0, bHeight/2 + 2, bDepth/2 + 0.1);
+            const glassB = new THREE.Mesh(new THREE.BoxGeometry(gW, gH, 0.2), glassMat);
+            glassB.position.set(0, bHeight/2 + 2, -bDepth/2 - 0.1);
+            const glassL = new THREE.Mesh(new THREE.BoxGeometry(0.2, gH, bDepth - 8), glassMat);
+            glassL.position.set(-bWidth/2 - 0.1, bHeight/2 + 2, 0);
+            const glassR = new THREE.Mesh(new THREE.BoxGeometry(0.2, gH, bDepth - 8), glassMat);
+            glassR.position.set(bWidth/2 + 0.1, bHeight/2 + 2, 0);
+            
+            group.add(glassF, glassB, glassL, glassR);
+            group.position.set(x, 0.2, z); // Acima da calçada
             scene.add(group);
         }
 
-        // Mapa expandido de -400 a 400
-        for(let x = -400; x <= 400; x += 50) {
-            for(let z = -400; z <= 400; z += 50) {
-                // Deixa o centro principal livre para dar respawn
-                if(Math.abs(x) < 40 && Math.abs(z) < 40) continue;
-                // Chance de 70% de nascer um prédio ali, cria caminhos orgânicos
-                if(Math.random() < 0.7) {
-                    createBuilding(x, z);
+        function createCity(offsetX, offsetZ) {
+            const blockSize = 100;
+            const streetWidth = 30;
+            const step = blockSize + streetWidth; // 130 de distância entre quarteirões
+            
+            // Asfalto da Cidade Inteira
+            const cityRoadMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+            const cityRoad = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), cityRoadMat);
+            cityRoad.rotation.x = -Math.PI / 2;
+            cityRoad.position.set(offsetX, 0.05, offsetZ);
+            scene.add(cityRoad);
+            
+            const lineGeoV = new THREE.PlaneGeometry(1, 4);
+            const lineGeoH = new THREE.PlaneGeometry(4, 1);
+            const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            
+            for(let x = -390; x <= 390; x += step) {
+                for(let z = -390; z <= 390; z += step) {
+                    // Limpa a área de Spawn do jogador (Cidade 1)
+                    if (offsetX === 0 && Math.abs(x) < 60 && Math.abs(z) < 60) continue;
+                    
+                    // Calçada de 100x100
+                    const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0x7f8c8d });
+                    const sidewalk = new THREE.Mesh(new THREE.BoxGeometry(blockSize, 0.2, blockSize), sidewalkMat);
+                    sidewalk.position.set(x + offsetX, 0.1, z + offsetZ);
+                    scene.add(sidewalk);
+                    
+                    // 4 Prédios dentro dessa Quadra
+                    const bSize = 35;
+                    createBuilding(x + offsetX - 20, z + offsetZ - 20, bSize, bSize);
+                    createBuilding(x + offsetX + 20, z + offsetZ - 20, bSize, bSize);
+                    createBuilding(x + offsetX - 20, z + offsetZ + 20, bSize, bSize);
+                    createBuilding(x + offsetX + 20, z + offsetZ + 20, bSize, bSize);
+                }
+            }
+            
+            // Linhas Brancas Tracejadas nas Ruas Verticais
+            for(let x = -390 - streetWidth/2; x <= 390 + streetWidth; x += step) {
+                for(let z = -450; z <= 450; z += 12) {
+                    const line = new THREE.Mesh(lineGeoV, lineMat);
+                    line.rotation.x = -Math.PI / 2;
+                    line.position.set(x + offsetX, 0.06, z + offsetZ);
+                    scene.add(line);
+                }
+            }
+            // Linhas Brancas Tracejadas nas Ruas Horizontais
+            for(let z = -390 - streetWidth/2; z <= 390 + streetWidth; z += step) {
+                for(let x = -450; x <= 450; x += 12) {
+                    const line = new THREE.Mesh(lineGeoH, lineMat);
+                    line.rotation.x = -Math.PI / 2;
+                    line.position.set(x + offsetX, 0.06, z + offsetZ);
+                    scene.add(line);
                 }
             }
         }
 
+        // Gera Cidade 1 e Cidade 2 (a 1600 metros de distância)
+        createCity(0, 0); 
+        createCity(1600, 0); 
+
+        // Oceano no meio
+        const oceanMat = new THREE.MeshStandardMaterial({ color: 0x0984e3, transparent: true, opacity: 0.85, roughness: 0.1 });
+        const ocean = new THREE.Mesh(new THREE.PlaneGeometry(700, 6000), oceanMat);
+        ocean.rotation.x = -Math.PI / 2;
+        ocean.position.set(800, 0.1, 0); // Fica entre 450 e 1150
+        scene.add(ocean);
+
+        // A Grande Ponte Conectando as Duas Cidades
+        const bridgeMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+        const bridge = new THREE.Mesh(new THREE.BoxGeometry(700, 1, 40), bridgeMat);
+        bridge.position.set(800, 0.5, 0);
+        scene.add(bridge);
+        
+        // Linhas tracejadas na Ponte
+        for(let x = 450; x <= 1150; x += 10) {
+            const line = new THREE.Mesh(new THREE.PlaneGeometry(4, 1), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+            line.rotation.x = -Math.PI / 2;
+            line.position.set(x, 1.01, 0);
+            scene.add(line);
+        }
+
         // --- SISTEMA DE FUMAÇA (DRIFT) ---
-        const smokeGeo = new THREE.SphereGeometry(0.6, 6, 6);
+        const smokeGeo = new THREE.SphereGeometry(0.8, 6, 6);
         function spawnDriftSmoke(x, z) {
             const smokeMat = new THREE.MeshBasicMaterial({ color: 0xdddddd, transparent: true, opacity: 0.4 });
             const puff = new THREE.Mesh(smokeGeo, smokeMat);
-            
-            // Nasce um pouquinho espalhado para ficar natural
             puff.position.set(x + (Math.random() - 0.5), 0.4, z + (Math.random() - 0.5));
             scene.add(puff);
-            
             driftSmokeParticles.push({ mesh: puff, life: 5.0 }); // Dura 5 segundos
         }
 
@@ -200,22 +263,14 @@
             const canvas = document.createElement('canvas');
             canvas.width = 256; canvas.height = 64;
             const ctx = canvas.getContext('2d');
-            
             ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-            ctx.roundRect(10, 10, 236, 44, 10);
-            ctx.fill();
-            
-            ctx.fillStyle = 'white';
-            ctx.font = 'bold 24px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
+            ctx.roundRect(10, 10, 236, 44, 10); ctx.fill();
+            ctx.fillStyle = 'white'; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.fillText(name.toUpperCase(), canvas.width / 2, canvas.height / 2);
-            
             const texture = new THREE.CanvasTexture(canvas);
             const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
             const sprite = new THREE.Sprite(material);
-            sprite.scale.set(4, 1, 1);
-            return sprite;
+            sprite.scale.set(4, 1, 1); return sprite;
         }
 
         function createCarMesh(colorHex, playerName) {
@@ -225,62 +280,38 @@
             const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.4, 2), new THREE.MeshStandardMaterial({ color: 0x222222 }));
             cabin.position.set(0, 0.9, -0.2);
             group.add(body, cabin);
-            
             const tag = makeNameTag(playerName);
-            tag.position.y = 2.0;
-            group.add(tag);
-            
-            scene.add(group);
-            return group;
+            tag.position.y = 2.0; group.add(tag);
+            scene.add(group); return group;
         }
 
         function createHumanMesh(colorHex, playerName) {
             const group = new THREE.Group();
-            
-            // Corpo levantado para acomodar as pernas
             const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.3), new THREE.MeshStandardMaterial({ color: colorHex }));
             body.position.y = 1.05;
             const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshStandardMaterial({ color: 0xffdbac }));
             head.position.y = 1.6;
             
-            // Pernas
             const legMat = new THREE.MeshStandardMaterial({ color: 0x2233aa });
-            const legL = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.6, 0.28), legMat);
-            legL.position.set(-0.15, 0.4, 0);
-            const legR = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.6, 0.28), legMat);
-            legR.position.set(0.15, 0.4, 0);
+            const legL = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.6, 0.28), legMat); legL.position.set(-0.15, 0.4, 0);
+            const legR = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.6, 0.28), legMat); legR.position.set(0.15, 0.4, 0);
             
             group.add(body, head, legL, legR);
-            
-            // Salvamos as pernas para conseguir anima-las depois no Loop
-            group.userData.legL = legL;
-            group.userData.legR = legR;
-            
-            const tag = makeNameTag(playerName);
-            tag.position.y = 2.5;
-            group.add(tag);
-            
-            scene.add(group);
-            return group;
+            group.userData.legL = legL; group.userData.legR = legR;
+            const tag = makeNameTag(playerName); tag.position.y = 2.5; group.add(tag);
+            scene.add(group); return group;
         }
 
-        // --- LÓGICA MULTIPLAYER (PEERJS) ---
-        function setStatus(msg) {
-            document.getElementById('status-msg').innerText = msg;
-        }
+        // --- LÓGICA MULTIPLAYER ---
+        function setStatus(msg) { document.getElementById('status-msg').innerText = msg; }
 
         function startGameEngine() {
-            console.log("[GERAL] Iniciando engine gráfica...");
             document.getElementById('ui-layer').style.display = 'none';
             document.getElementById('hud').style.display = 'block';
             
             const topDisplay = document.getElementById('room-id-display');
-            if (isHost) {
-                topDisplay.innerText = `ID DA SALA (HOST): ${myId}`;
-            } else {
-                const hostId = document.getElementById('room-id').value;
-                topDisplay.innerText = `SALA: ${hostId} (CONECTADO)`;
-            }
+            if (isHost) topDisplay.innerText = `ID DA SALA (HOST): ${myId}`;
+            else topDisplay.innerText = `SALA: ${document.getElementById('room-id').value} (CONECTADO)`;
             topDisplay.style.display = 'block';
             
             players[myId] = {
@@ -295,141 +326,82 @@
             requestAnimationFrame(animate);
         }
 
-        // --- LÓGICA DO HOST ---
         function createRoom() {
             myName = document.getElementById('player-name').value || "Host";
             setStatus("Criando sala, aguarde...");
-            
-            peer = new Peer();
-            peer.on('disconnected', function() { peer.reconnect(); });
-            
-            peer.on('open', function(id) {
-                myId = id;
-                isHost = true;
-                startGameEngine();
-            });
-
+            peer = new Peer(); peer.on('disconnected', function() { peer.reconnect(); });
+            peer.on('open', function(id) { myId = id; isHost = true; startGameEngine(); });
             peer.on('connection', function(conn) {
                 clientConnections.push(conn);
-                
                 conn.on('data', function(data) {
                     if(data.type === 'join') {
                         players[data.id] = { 
                             name: data.name, color: data.color, isDriving: true,
                             car: { x: 0, z: 0, rotation: 0, targetX: 0, targetZ: 0, targetRotation: 0 },
                             human: { x: 0, y: 0, z: 0, rotation: 0, targetX: 0, targetY: 0, targetZ: 0, targetRotation: 0 },
-                            carMesh: createCarMesh(data.color, data.name),
-                            humanMesh: createHumanMesh(data.color, data.name)
+                            carMesh: createCarMesh(data.color, data.name), humanMesh: createHumanMesh(data.color, data.name)
                         };
                         players[data.id].humanMesh.visible = false;
                     } 
                     else if (data.type === 'update') {
                         if(players[data.id]) {
-                            let p = players[data.id];
-                            p.isDriving = data.isDriving;
-                            p.car.targetX = data.car.x;
-                            p.car.targetZ = data.car.z;
-                            p.car.targetRotation = data.car.rotation;
-                            p.human.targetX = data.human.x;
-                            p.human.targetY = data.human.y;
-                            p.human.targetZ = data.human.z;
-                            p.human.targetRotation = data.human.rotation;
+                            let p = players[data.id]; p.isDriving = data.isDriving;
+                            p.car.targetX = data.car.x; p.car.targetZ = data.car.z; p.car.targetRotation = data.car.rotation;
+                            p.human.targetX = data.human.x; p.human.targetY = data.human.y; p.human.targetZ = data.human.z; p.human.targetRotation = data.human.rotation;
                         }
                     }
                 });
-
                 conn.on('close', function() {
                     clientConnections = clientConnections.filter(c => c.peer !== conn.peer);
-                    if(players[conn.peer]) {
-                        scene.remove(players[conn.peer].carMesh);
-                        scene.remove(players[conn.peer].humanMesh);
-                        delete players[conn.peer];
-                    }
+                    if(players[conn.peer]) { scene.remove(players[conn.peer].carMesh); scene.remove(players[conn.peer].humanMesh); delete players[conn.peer]; }
                 });
             });
         }
 
-        // --- LÓGICA DO CLIENTE ---
         function joinRoom() {
             const hostId = document.getElementById('room-id').value.trim();
             if(!hostId) return setStatus("Digite o ID!");
-            
             myName = document.getElementById('player-name').value || "Convidado";
             setStatus("Conectando...");
-            
-            peer = new Peer();
-            peer.on('disconnected', function() { peer.reconnect(); });
-            
+            peer = new Peer(); peer.on('disconnected', function() { peer.reconnect(); });
             peer.on('open', function(id) {
-                myId = id;
-                hostConnection = peer.connect(hostId, { reliable: true });
-                
-                hostConnection.on('open', function() {
-                    setStatus("Conectado!");
-                    hostConnection.send({ type: 'join', id: myId, name: myName, color: myColor });
-                    startGameEngine();
-                });
-
-                hostConnection.on('data', function(state) {
-                    if(state.type === 'stateUpdate') syncWorldState(state.playersData);
-                });
-                
-                hostConnection.on('close', function() {
-                    alert("O Host fechou a sala!");
-                    window.location.reload();
-                });
+                myId = id; hostConnection = peer.connect(hostId, { reliable: true });
+                hostConnection.on('open', function() { setStatus("Conectado!"); hostConnection.send({ type: 'join', id: myId, name: myName, color: myColor }); startGameEngine(); });
+                hostConnection.on('data', function(state) { if(state.type === 'stateUpdate') syncWorldState(state.playersData); });
+                hostConnection.on('close', function() { alert("O Host fechou a sala!"); window.location.reload(); });
             });
-            peer.on('error', function(err) { 
-                if (err.type === 'peer-unavailable') setStatus("Sala não encontrada.");
-                else setStatus("Erro: " + err.type); 
-            });
+            peer.on('error', function(err) { if (err.type === 'peer-unavailable') setStatus("Sala não encontrada."); else setStatus("Erro: " + err.type); });
         }
 
         function syncWorldState(serverPlayers) {
             for (let id in serverPlayers) {
                 if (id === myId) continue;
                 let sp = serverPlayers[id];
-                
                 if (!players[id]) {
                     players[id] = { 
                         name: sp.name, color: sp.color, isDriving: sp.isDriving,
                         car: { x: sp.car.x, z: sp.car.z, rotation: sp.car.rotation, targetX: sp.car.x, targetZ: sp.car.z, targetRotation: sp.car.rotation },
                         human: { x: sp.human.x, y: sp.human.y, z: sp.human.z, rotation: sp.human.rotation, targetX: sp.human.x, targetY: sp.human.y, targetZ: sp.human.z, targetRotation: sp.human.rotation },
-                        carMesh: createCarMesh(sp.color, sp.name),
-                        humanMesh: createHumanMesh(sp.color, sp.name)
+                        carMesh: createCarMesh(sp.color, sp.name), humanMesh: createHumanMesh(sp.color, sp.name)
                     };
                     players[id].humanMesh.visible = !sp.isDriving;
                 } else {
                     players[id].isDriving = sp.isDriving;
-                    players[id].car.targetX = sp.car.x;
-                    players[id].car.targetZ = sp.car.z;
-                    players[id].car.targetRotation = sp.car.rotation;
-                    players[id].human.targetX = sp.human.x;
-                    players[id].human.targetY = sp.human.y;
-                    players[id].human.targetZ = sp.human.z;
-                    players[id].human.targetRotation = sp.human.rotation;
+                    players[id].car.targetX = sp.car.x; players[id].car.targetZ = sp.car.z; players[id].car.targetRotation = sp.car.rotation;
+                    players[id].human.targetX = sp.human.x; players[id].human.targetY = sp.human.y; players[id].human.targetZ = sp.human.z; players[id].human.targetRotation = sp.human.rotation;
                 }
             }
-            
             for (let id in players) {
-                if (id !== myId && !serverPlayers[id]) {
-                    scene.remove(players[id].carMesh);
-                    scene.remove(players[id].humanMesh);
-                    delete players[id];
-                }
+                if (id !== myId && !serverPlayers[id]) { scene.remove(players[id].carMesh); scene.remove(players[id].humanMesh); delete players[id]; }
             }
         }
 
-        // --- ENTRADA (TECLADO E AÇÕES) ---
+        // --- ENTRADA E CONTROLES ---
         window.addEventListener('keydown', (e) => {
             if (!keys[e.code]) { 
                 if (e.code === 'KeyF') {
                     if (myIsDriving) {
-                        myIsDriving = false;
-                        myHumanX = myX + 2; 
-                        myHumanZ = myZ;
-                        myHumanY = 0; // Garante que nasce no chão
-                        myHumanRotation = myRotation;
+                        myIsDriving = false; myHumanX = myX + 2; myHumanZ = myZ; myHumanY = 0; myHumanRotation = myRotation;
                     } else {
                         let dist = Math.hypot(myHumanX - myX, myHumanZ - myZ);
                         if (dist < 4.0) myIsDriving = true;
@@ -440,28 +412,37 @@
         });
         window.addEventListener('keyup', (e) => keys[e.code] = false);
 
-        // --- FÍSICA E ANIMAÇÃO ---
+        // --- FÍSICA CORRIGIDA PARA DRIFT ---
         function updatePhysics(dtMod) {
             let isTurning = keys['KeyA'] || keys['KeyD'] || keys['ArrowLeft'] || keys['ArrowRight'];
             let isHandbrake = keys['Space'];
+            let isAccelerating = keys['KeyW'] || keys['ArrowUp'];
+            let isReversing = keys['KeyS'] || keys['ArrowDown'];
 
             if (myIsDriving) {
-                // Acelerar e Ré
-                if (keys['KeyW'] || keys['ArrowUp']) mySpeed += 0.01 * dtMod;
-                else if (keys['KeyS'] || keys['ArrowDown']) mySpeed -= 0.01 * dtMod;
-                else if (!isHandbrake) {
-                    // Atrito normal se não estiver freando
+                
+                if (isAccelerating) {
+                    mySpeed += 0.01 * dtMod;
+                } else if (isReversing) {
+                    mySpeed -= 0.01 * dtMod;
+                } else if (!isHandbrake) {
+                    // Atrito natural
                     mySpeed -= Math.sign(mySpeed) * 0.005 * dtMod;
                 }
                 
-                // FREIO DE MÃO
+                // SISTEMA DE DRIFT E FREIO DE MÃO
                 if (isHandbrake) {
-                    mySpeed -= Math.sign(mySpeed) * 0.015 * dtMod; // Freia MUITO mais rápido
+                    // Se você está acelerando E virando rápido: É DRIFT! A velocidade se mantém.
+                    if (isAccelerating && Math.abs(mySpeed) > 0.2 && isTurning) {
+                        // Perde apenas 0.001 de velocidade para dar o efeito que os pneus estão patinando
+                        mySpeed -= Math.sign(mySpeed) * 0.001 * dtMod;
+                    } else {
+                        // Se não estiver acelerando para dar drift, age como freio de emergência bruto
+                        mySpeed -= Math.sign(mySpeed) * 0.015 * dtMod; 
+                    }
                     
-                    // LÓGICA DE DRIFT
-                    // Se estiver rápido, virando e puxando o freio, ele dá drift!
+                    // Se estiver rápido e virando, solta fumaça dos dois pneus traseiros
                     if (Math.abs(mySpeed) > 0.2 && isTurning) {
-                        // Calcula posição dos pneus traseiros
                         let smokeX = myX - Math.sin(myRotation) * 1.5;
                         let smokeZ = myZ - Math.cos(myRotation) * 1.5;
                         spawnDriftSmoke(smokeX, smokeZ);
@@ -472,44 +453,31 @@
                 if(mySpeed > 0.8) mySpeed = 0.8;
                 if(mySpeed < -0.4) mySpeed = -0.4;
 
-                // Curvas
+                // Curvas mais agressivas durante o drift
                 if (Math.abs(mySpeed) > 0) {
                     let mod = mySpeed > 0 ? 1 : -1;
-                    if (keys['KeyA'] || keys['ArrowLeft']) myRotation += 0.03 * mod * dtMod;
-                    if (keys['KeyD'] || keys['ArrowRight']) myRotation -= 0.03 * mod * dtMod;
+                    let driftTurnBoost = (isHandbrake && Math.abs(mySpeed) > 0.2) ? 1.6 : 1.0;
+                    if (keys['KeyA'] || keys['ArrowLeft']) myRotation += 0.03 * mod * driftTurnBoost * dtMod;
+                    if (keys['KeyD'] || keys['ArrowRight']) myRotation -= 0.03 * mod * driftTurnBoost * dtMod;
                 }
             } else {
-                // Fricção de frenagem forçada do carro vazio
+                // Carro vazio freia
                 mySpeed -= Math.sign(mySpeed) * 0.005 * dtMod;
                 if(Math.abs(mySpeed) < 0.006) mySpeed = 0;
                 
-                // Controles do Humano a Pé
+                // Controles a pé
                 let walkSpd = 0.08 * dtMod;
-                if (keys['KeyW'] || keys['ArrowUp']) {
-                    myHumanX += Math.sin(myHumanRotation) * walkSpd;
-                    myHumanZ += Math.cos(myHumanRotation) * walkSpd;
-                }
-                if (keys['KeyS'] || keys['ArrowDown']) {
-                    myHumanX -= Math.sin(myHumanRotation) * walkSpd;
-                    myHumanZ -= Math.cos(myHumanRotation) * walkSpd;
-                }
+                if (keys['KeyW'] || keys['ArrowUp']) { myHumanX += Math.sin(myHumanRotation) * walkSpd; myHumanZ += Math.cos(myHumanRotation) * walkSpd; }
+                if (keys['KeyS'] || keys['ArrowDown']) { myHumanX -= Math.sin(myHumanRotation) * walkSpd; myHumanZ -= Math.cos(myHumanRotation) * walkSpd; }
                 if (keys['KeyA'] || keys['ArrowLeft']) myHumanRotation += 0.05 * dtMod;
                 if (keys['KeyD'] || keys['ArrowRight']) myHumanRotation -= 0.05 * dtMod;
 
-                // PULO (GRAVIDADE)
-                if (isHandbrake && myHumanY <= 0) { // Se apertar espaço no chão
-                    myHumanVelocityY = 0.25; // Força do pulo
-                }
+                // PULO
+                if (isHandbrake && myHumanY <= 0) myHumanVelocityY = 0.25; 
                 
-                // Aplica Gravidade e Move
                 myHumanY += myHumanVelocityY * dtMod;
-                myHumanVelocityY -= 0.015 * dtMod; // Puxando pra baixo
-                
-                // Colisão com o chão
-                if (myHumanY <= 0) {
-                    myHumanY = 0;
-                    myHumanVelocityY = 0;
-                }
+                myHumanVelocityY -= 0.015 * dtMod; 
+                if (myHumanY <= 0) { myHumanY = 0; myHumanVelocityY = 0; }
             }
 
             myX += Math.sin(myRotation) * mySpeed * dtMod;
@@ -524,26 +492,20 @@
             if (!lastFrameTime) lastFrameTime = time;
             let deltaTime = (time - lastFrameTime) / 1000;
             lastFrameTime = time;
-            
             if (deltaTime > 0.1) deltaTime = 0.1; 
             let dtMod = deltaTime * 60; 
 
             updatePhysics(dtMod);
-            
             let timeSec = time / 1000;
 
             // ATUALIZA FUMAÇA DO DRIFT
             for(let i = driftSmokeParticles.length - 1; i >= 0; i--) {
                 let p = driftSmokeParticles[i];
                 p.life -= deltaTime;
-                p.mesh.position.y += 0.6 * deltaTime; // Sobe lentamente
-                p.mesh.scale.multiplyScalar(1.02); // Expande
-                p.mesh.material.opacity = (p.life / 5.0) * 0.4; // Fica transparente
-                
-                if(p.life <= 0) {
-                    scene.remove(p.mesh);
-                    driftSmokeParticles.splice(i, 1);
-                }
+                p.mesh.position.y += 0.6 * deltaTime;
+                p.mesh.scale.multiplyScalar(1.02);
+                p.mesh.material.opacity = (p.life / 5.0) * 0.4;
+                if(p.life <= 0) { scene.remove(p.mesh); driftSmokeParticles.splice(i, 1); }
             }
 
             for (let id in players) {
@@ -551,16 +513,10 @@
                 if (!p.carMesh) continue;
 
                 if (id === myId) {
-                    // Seu próprio mundo
-                    p.carMesh.position.set(myX, 0, myZ);
-                    p.carMesh.rotation.y = myRotation;
-                    
-                    p.humanMesh.position.set(myHumanX, myHumanY, myHumanZ);
-                    p.humanMesh.rotation.y = myHumanRotation;
-                    
+                    p.carMesh.position.set(myX, 0, myZ); p.carMesh.rotation.y = myRotation;
+                    p.humanMesh.position.set(myHumanX, myHumanY, myHumanZ); p.humanMesh.rotation.y = myHumanRotation;
                     p.humanMesh.visible = !myIsDriving;
 
-                    // Animação das Suas Pernas
                     let moving = !myIsDriving && (keys['KeyW'] || keys['KeyS'] || keys['ArrowUp'] || keys['ArrowDown']);
                     if(moving && myHumanY <= 0) {
                         p.humanMesh.userData.legL.rotation.x = Math.sin(timeSec * 15) * 0.5;
@@ -569,104 +525,65 @@
                         p.humanMesh.userData.legL.rotation.x = 0;
                         p.humanMesh.userData.legR.rotation.x = 0;
                     }
-
                 } else {
-                    // Mundo dos outros
-                    p.car.x += (p.car.targetX - p.car.x) * 0.2 * dtMod;
-                    p.car.z += (p.car.targetZ - p.car.z) * 0.2 * dtMod;
+                    p.car.x += (p.car.targetX - p.car.x) * 0.2 * dtMod; p.car.z += (p.car.targetZ - p.car.z) * 0.2 * dtMod;
                     let diffCar = p.car.targetRotation - p.car.rotation;
-                    while (diffCar < -Math.PI) diffCar += Math.PI * 2;
-                    while (diffCar > Math.PI) diffCar -= Math.PI * 2;
+                    while (diffCar < -Math.PI) diffCar += Math.PI * 2; while (diffCar > Math.PI) diffCar -= Math.PI * 2;
                     p.car.rotation += diffCar * 0.2 * dtMod;
+                    p.carMesh.position.set(p.car.x, 0, p.car.z); p.carMesh.rotation.y = p.car.rotation;
 
-                    p.carMesh.position.set(p.car.x, 0, p.car.z);
-                    p.carMesh.rotation.y = p.car.rotation;
-
-                    let oldX = p.human.x;
-                    let oldZ = p.human.z;
-
-                    p.human.x += (p.human.targetX - p.human.x) * 0.2 * dtMod;
-                    p.human.y += (p.human.targetY - p.human.y) * 0.3 * dtMod; // Interpolando o Pulo
-                    p.human.z += (p.human.targetZ - p.human.z) * 0.2 * dtMod;
+                    let oldX = p.human.x; let oldZ = p.human.z;
+                    p.human.x += (p.human.targetX - p.human.x) * 0.2 * dtMod; p.human.y += (p.human.targetY - p.human.y) * 0.3 * dtMod; p.human.z += (p.human.targetZ - p.human.z) * 0.2 * dtMod;
                     let diffHum = p.human.targetRotation - p.human.rotation;
-                    while (diffHum < -Math.PI) diffHum += Math.PI * 2;
-                    while (diffHum > Math.PI) diffHum -= Math.PI * 2;
+                    while (diffHum < -Math.PI) diffHum += Math.PI * 2; while (diffHum > Math.PI) diffHum -= Math.PI * 2;
                     p.human.rotation += diffHum * 0.2 * dtMod;
-
-                    p.humanMesh.position.set(p.human.x, p.human.y, p.human.z);
-                    p.humanMesh.rotation.y = p.human.rotation;
-                    
+                    p.humanMesh.position.set(p.human.x, p.human.y, p.human.z); p.humanMesh.rotation.y = p.human.rotation;
                     p.humanMesh.visible = !p.isDriving;
 
-                    // Animação das Pernas dos Amigos (Se eles estiverem trocando de posição, as pernas balançam)
                     let isMovingRemotely = Math.abs(p.human.x - oldX) > 0.01 || Math.abs(p.human.z - oldZ) > 0.01;
                     if(!p.isDriving && isMovingRemotely && p.human.y < 0.2) {
                         p.humanMesh.userData.legL.rotation.x = Math.sin(timeSec * 15) * 0.5;
                         p.humanMesh.userData.legR.rotation.x = -Math.sin(timeSec * 15) * 0.5;
                     } else {
-                        p.humanMesh.userData.legL.rotation.x = 0;
-                        p.humanMesh.userData.legR.rotation.x = 0;
+                        p.humanMesh.userData.legL.rotation.x = 0; p.humanMesh.userData.legR.rotation.x = 0;
                     }
                 }
             }
 
-            // Câmera
             if(players[myId]) {
                 if (myIsDriving) {
                     const myCar = players[myId].carMesh;
                     const offset = new THREE.Vector3(-Math.sin(myRotation) * 12, 6, -Math.cos(myRotation) * 12);
-                    camera.position.copy(myCar.position).add(offset);
-                    camera.lookAt(myCar.position);
+                    camera.position.copy(myCar.position).add(offset); camera.lookAt(myCar.position);
                 } else {
                     const myBody = players[myId].humanMesh;
                     const offset = new THREE.Vector3(-Math.sin(myHumanRotation) * 6, 4, -Math.cos(myHumanRotation) * 6);
-                    camera.position.copy(myBody.position).add(offset);
-                    camera.lookAt(myBody.position.clone().add(new THREE.Vector3(0, 1, 0)));
+                    camera.position.copy(myBody.position).add(offset); camera.lookAt(myBody.position.clone().add(new THREE.Vector3(0, 1, 0)));
                 }
             }
 
-            // Transmissão da Rede
             if (time - lastNetworkSend > NETWORK_TICK_RATE) {
                 lastNetworkSend = time;
-                
                 if (isHost) {
                     let statePayload = {};
                     for(let id in players) {
                         let p = players[id];
                         statePayload[id] = { 
                             name: p.name, color: p.color, isDriving: p.isDriving,
-                            car: {
-                                x: (id === myId) ? myX : p.car.targetX, 
-                                z: (id === myId) ? myZ : p.car.targetZ, 
-                                rotation: (id === myId) ? myRotation : p.car.targetRotation 
-                            },
-                            human: {
-                                x: (id === myId) ? myHumanX : p.human.targetX, 
-                                y: (id === myId) ? myHumanY : p.human.targetY, 
-                                z: (id === myId) ? myHumanZ : p.human.targetZ, 
-                                rotation: (id === myId) ? myHumanRotation : p.human.targetRotation 
-                            }
+                            car: { x: (id === myId) ? myX : p.car.targetX, z: (id === myId) ? myZ : p.car.targetZ, rotation: (id === myId) ? myRotation : p.car.targetRotation },
+                            human: { x: (id === myId) ? myHumanX : p.human.targetX, y: (id === myId) ? myHumanY : p.human.targetY, z: (id === myId) ? myHumanZ : p.human.targetZ, rotation: (id === myId) ? myHumanRotation : p.human.targetRotation }
                         };
                     }
-                    clientConnections.forEach(conn => {
-                        if(conn.open) conn.send({ type: 'stateUpdate', playersData: statePayload });
-                    });
+                    clientConnections.forEach(conn => { if(conn.open) conn.send({ type: 'stateUpdate', playersData: statePayload }); });
                 } else if (hostConnection && hostConnection.open) {
-                    hostConnection.send({ 
-                        type: 'update', id: myId, isDriving: myIsDriving,
-                        car: { x: myX, z: myZ, rotation: myRotation },
-                        human: { x: myHumanX, y: myHumanY, z: myHumanZ, rotation: myHumanRotation }
-                    });
+                    hostConnection.send({ type: 'update', id: myId, isDriving: myIsDriving, car: { x: myX, z: myZ, rotation: myRotation }, human: { x: myHumanX, y: myHumanY, z: myHumanZ, rotation: myHumanRotation } });
                 }
             }
-
             renderer.render(scene, camera);
         }
 
         window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight);
         });
     </script>
 </body>
